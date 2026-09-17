@@ -11,6 +11,7 @@ on:
       - "social_watcher_v2.py"
       - "social_watcher_v3.py"
       - "telegram_notify.py"
+      - "merge_state.py"
       - "requirements.txt"
       - ".github/workflows/watch.yml"
   schedule:
@@ -54,6 +55,7 @@ jobs:
           python -m py_compile social_watcher_v2.py
           python -m py_compile social_watcher_v3.py
           python -m py_compile telegram_notify.py
+          python -m py_compile merge_state.py
           python -c "import watcher_v3 as w; assert 'TEST123' in w.extract_codes('promo code: TEST123')"
           python -c "import social_watcher_v3 as s; assert s.is_nmt_related('NMT.GG promo')"
 
@@ -105,10 +107,23 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          [ -f seen_codes.json ] && git add seen_codes.json || true
-          [ -f social_state.json ] && git add social_state.json || true
-          [ -f social_state_v3.json ] && git add social_state_v3.json || true
-          [ -f telegram_state.json ] && git add telegram_state.json || true
+          state_dir="$(mktemp -d)"
+          state_files=(seen_codes.json social_state.json social_state_v3.json telegram_state.json)
+          for file in "${state_files[@]}"; do
+            [ -f "$file" ] && cp "$file" "$state_dir/$file"
+          done
+
+          # Rebase cleanly first, then merge this scan's state into the newest
+          # remote state. This avoids losing detections when code/state changes
+          # land while a scan is running.
+          git restore -- "${state_files[@]}" 2>/dev/null || true
+          git pull --rebase origin main
+
+          for file in "${state_files[@]}"; do
+            [ -f "$state_dir/$file" ] || continue
+            python merge_state.py "$file" "$state_dir/$file"
+            git add "$file"
+          done
 
           if git diff --cached --quiet; then
             echo "No state changes"
@@ -116,5 +131,5 @@ jobs:
           fi
 
           git commit -m "Update NMT promo watcher state"
-          git pull --rebase origin main
           git push
+
