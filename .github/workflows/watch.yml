@@ -5,7 +5,9 @@ on:
     branches: [main]
     paths:
       - "watcher_v3.py"
+      - "watcher_v4.py"
       - "social_watcher.py"
+      - "social_watcher_v2.py"
       - "telegram_notify.py"
       - "requirements.txt"
       - ".github/workflows/watch.yml"
@@ -50,7 +52,9 @@ jobs:
       - name: Verify watcher syntax
         run: |
           python -m py_compile watcher_v3.py
+          python -m py_compile watcher_v4.py
           python -m py_compile social_watcher.py
+          python -m py_compile social_watcher_v2.py
           python -m py_compile telegram_notify.py
 
       - name: Choose fast or deep scan
@@ -60,9 +64,6 @@ jobs:
           event="${{ github.event_name }}"
           run_no="${{ github.run_number }}"
 
-          # Manual/push runs get the full scan. For schedules, use run number
-          # instead of wall-clock minute so GitHub scheduling delays cannot
-          # accidentally prevent deep scans.
           if [[ "$event" == "workflow_dispatch" || "$event" == "push" ]]; then
             echo "mode=deep" >> "$GITHUB_OUTPUT"
             echo "Deep scan forced by $event"
@@ -80,14 +81,15 @@ jobs:
           GITHUB_REPOSITORY: ${{ github.repository }}
           ALERT_THREAD: "1"
           PYTHONUNBUFFERED: "1"
-        run: python watcher_v3.py --mode "${{ steps.mode.outputs.mode }}"
+        run: python watcher_v4.py --mode "${{ steps.mode.outputs.mode }}"
 
       - name: Scan X and YouTube social sources
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
+          X_BEARER_TOKEN: ${{ secrets.X_BEARER_TOKEN }}
           PYTHONUNBUFFERED: "1"
-        run: python social_watcher.py --mode "${{ steps.mode.outputs.mode }}"
+        run: python social_watcher_v2.py --mode "${{ steps.mode.outputs.mode }}"
 
       - name: Send Telegram push notifications
         env:
