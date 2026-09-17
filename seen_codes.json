@@ -180,7 +180,22 @@
     "02b615ce38182e0a4df6d5c2",
     "688d954b1eacf593e0cefbcf",
     "649cd716638282f57e1b2293",
-    "85aaab367f92ebd5ff799d30"
+    "85aaab367f92ebd5ff799d30",
+    "c0430708a0906dd8ac7dc7ab",
+    "21303e54bb1c485a399a5acb",
+    "177e7c8586c43c66b602cc81",
+    "f0a2d066355776118aeffcef",
+    "09aaf766578b4bc9a9c62e5c",
+    "78bca0e07e7edb12116aef52",
+    "072731eebac3681056efa57d",
+    "bdfbbca99112f73064bb1d43",
+    "e534f984fcd5ef5523405a9e",
+    "4a72d1db4dc2d4d691e4c893",
+    "59e33a3c8d53c56e982701f4",
+    "d865fddec4cc5eaacf3f6478",
+    "214beef97412f09f49b8adbd",
+    "34f3d3a4d59ce18d0e983e22",
+    "5dd58ca913e15df72ad88c09"
   ],
   "code_last_alert": {
     "ALINAN": "2026-09-17T15:24:23.807883+00:00",
@@ -217,7 +232,7 @@
     "YATIRIM": "2026-09-17T15:24:23.807883+00:00",
     "YOKTUR": "2026-09-17T15:24:23.807883+00:00"
   },
-  "updated_at": "2026-09-17T16:28:32.546619+00:00",
+  "updated_at": "2026-09-17T16:35:53.899638+00:00",
   "health": {
     "primary_failure_streak": 0,
     "last_health_alert": null
