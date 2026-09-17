@@ -1,4 +1,8 @@
+import json
 import re
+import subprocess
+from datetime import datetime, timezone
+
 import watcher_v3 as w
 
 # Extend the core watcher with the Turkish phrase "promosyon kodu" without
@@ -33,6 +37,62 @@ w.DIRECT_PATTERNS = [
         re.I,
     ),
 ]
+
+
+def scan_youtube_fixed():
+    events = []
+    for query in w.YOUTUBE_QUERIES:
+        try:
+            proc = subprocess.run(
+                [
+                    "yt-dlp", "--skip-download", "--dump-json",
+                    "--playlist-end", "8", f"ytsearch8:{query}",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=95,
+            )
+            for line in proc.stdout.splitlines():
+                try:
+                    item = json.loads(line)
+                except Exception:
+                    continue
+                title = item.get("title") or ""
+                desc = item.get("description") or ""
+                url = item.get("webpage_url") or item.get("original_url") or ""
+                published = None
+                ts = item.get("timestamp")
+                if ts:
+                    try:
+                        published = datetime.fromtimestamp(float(ts), tz=timezone.utc).isoformat()
+                    except Exception:
+                        pass
+                if not published:
+                    upload_date = item.get("upload_date")
+                    if upload_date and len(upload_date) == 8:
+                        try:
+                            published = datetime.strptime(upload_date, "%Y%m%d").replace(tzinfo=timezone.utc).isoformat()
+                        except Exception:
+                            pass
+                for code, context in w.extract_codes(title + "\n" + desc).items():
+                    events.append(
+                        w.make_event(
+                            code,
+                            f"YouTube: {title[:90]}",
+                            url,
+                            context,
+                            published,
+                            "youtube",
+                        )
+                    )
+            if proc.returncode not in (0, 1):
+                print(f"[WARN] YouTube {query}: return {proc.returncode}")
+        except Exception as exc:
+            print(f"[WARN] YouTube {query}: {exc}")
+    return events
+
+
+w.scan_youtube = scan_youtube_fixed
 
 if __name__ == "__main__":
     w.main()
