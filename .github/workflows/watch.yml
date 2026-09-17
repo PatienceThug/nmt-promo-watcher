@@ -2,7 +2,13 @@ name: NMT Promo Watcher
 
 on:
   schedule:
+    # GitHub officially supports 5-minute cron intervals per schedule.
+    # Five staggered schedules give us an attempted scan every minute.
     - cron: "*/5 * * * *"
+    - cron: "1-59/5 * * * *"
+    - cron: "2-59/5 * * * *"
+    - cron: "3-59/5 * * * *"
+    - cron: "4-59/5 * * * *"
   workflow_dispatch:
 
 permissions:
@@ -16,7 +22,7 @@ concurrency:
 jobs:
   scan:
     runs-on: ubuntu-latest
-    timeout-minutes: 4
+    timeout-minutes: 5
 
     steps:
       - name: Checkout
@@ -28,24 +34,51 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: pip
 
       - name: Install dependencies
         run: pip install -r requirements.txt
+
+      - name: Verify watcher syntax
+        run: python -m py_compile watcher.py
+
+      - name: Choose fast or deep scan
+        id: mode
+        shell: bash
+        run: |
+          minute=$(date -u +%M)
+          if (( 10#$minute % 5 == 0 )); then
+            echo "mode=deep" >> "$GITHUB_OUTPUT"
+            echo "Deep scan: Telegram + NMT + mirrors + web search + YouTube"
+          else
+            echo "mode=fast" >> "$GITHUB_OUTPUT"
+            echo "Fast scan: Telegram + NMT official pages"
+          fi
 
       - name: Scan for new promo codes
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-        run: python watcher.py
+          ALERT_THREAD: "1"
+          PYTHONUNBUFFERED: "1"
+        run: python watcher.py --mode "${{ steps.mode.outputs.mode }}"
 
-      - name: Persist seen codes
+      - name: Persist watcher state
+        shell: bash
         run: |
-          if git diff --quiet -- seen_codes.json && git ls-files --error-unmatch seen_codes.json >/dev/null 2>&1; then
-            echo "No state changes"
+          if [ ! -f seen_codes.json ]; then
+            echo "No state file yet"
             exit 0
           fi
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add seen_codes.json
-          git commit -m "Update seen NMT promo codes" || exit 0
+
+          if git diff --cached --quiet; then
+            echo "No state changes"
+            exit 0
+          fi
+
+          git commit -m "Update NMT promo watcher state"
           git push
