@@ -1,3 +1,5 @@
+import base64
+import hashlib
 import json
 import os
 from datetime import datetime, timezone
@@ -20,13 +22,32 @@ def github_headers():
     }
 
 
-def detect_chat_id():
-    """Best-effort fallback: use the most recent private chat that messaged the bot."""
-    if CHAT_ID:
-        return CHAT_ID
-    if not BOT_TOKEN:
+def protect_chat_id(chat_id: str):
+    """Protect the numeric chat id before storing it in the public repo state file."""
+    if not BOT_TOKEN or not chat_id:
+        return ""
+    key = hashlib.sha256((BOT_TOKEN + "::nmt-chat-id").encode()).digest()
+    raw = chat_id.encode()
+    encrypted = bytes(b ^ key[i % len(key)] for i, b in enumerate(raw))
+    return base64.urlsafe_b64encode(encrypted).decode()
+
+
+def recover_chat_id(value: str):
+    if not BOT_TOKEN or not value:
+        return ""
+    try:
+        encrypted = base64.urlsafe_b64decode(value.encode())
+        key = hashlib.sha256((BOT_TOKEN + "::nmt-chat-id").encode()).digest()
+        raw = bytes(b ^ key[i % len(key)] for i, b in enumerate(encrypted))
+        chat_id = raw.decode()
+        return chat_id if chat_id.lstrip("-").isdigit() else ""
+    except Exception:
         return ""
 
+
+def detect_chat_id_from_updates():
+    if not BOT_TOKEN:
+        return ""
     r = requests.get(
         f"https://api.telegram.org/bot{BOT_TOKEN}/getUpdates",
         timeout=20,
@@ -67,14 +88,15 @@ def send_telegram(text: str, chat_id: str):
 
 def load_state():
     if not STATE_PATH.exists():
-        return {"initialized": False, "sent_issue_numbers": []}
+        return {"initialized": False, "sent_issue_numbers": [], "chat_id_enc": ""}
     try:
         data = json.loads(STATE_PATH.read_text(encoding="utf-8"))
         data.setdefault("initialized", False)
         data.setdefault("sent_issue_numbers", [])
+        data.setdefault("chat_id_enc", "")
         return data
     except Exception:
-        return {"initialized": False, "sent_issue_numbers": []}
+        return {"initialized": False, "sent_issue_numbers": [], "chat_id_enc": ""}
 
 
 def save_state(state):
@@ -152,17 +174,24 @@ def main():
         print("[TG] TELEGRAM_BOT_TOKEN not configured yet")
         return
 
-    chat_id = detect_chat_id()
+    state = load_state()
+    chat_id = CHAT_ID or recover_chat_id(state.get("chat_id_enc", ""))
+
     if not chat_id:
-        print("[TG] No Telegram chat found. Send /start to the bot, or set TELEGRAM_CHAT_ID.")
+        chat_id = detect_chat_id_from_updates()
+        if chat_id:
+            state["chat_id_enc"] = protect_chat_id(chat_id)
+            save_state(state)
+            print("[TG] Telegram private chat discovered and protected in state")
+
+    if not chat_id:
+        print("[TG] No Telegram chat found. Send /start to the bot and wait for the next run.")
         return
 
     issues = get_promo_issues()
-    state = load_state()
     sent = set(int(x) for x in state.get("sent_issue_numbers", []))
 
     if not state.get("initialized"):
-        # Baseline old alerts to prevent spam, then send one health-test message.
         sent.update(int(issue["number"]) for issue in issues)
         send_telegram(
             "✅ NMT Promo Watcher aktif.\n\n"
