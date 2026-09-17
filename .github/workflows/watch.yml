@@ -1,6 +1,12 @@
 name: NMT Promo Watcher
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - "watcher.py"
+      - "requirements.txt"
+      - ".github/workflows/watch.yml"
   schedule:
     # GitHub officially supports 5-minute cron intervals per schedule.
     # Five staggered schedules give us an attempted scan every minute.
