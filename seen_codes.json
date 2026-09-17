@@ -195,7 +195,14 @@
     "d865fddec4cc5eaacf3f6478",
     "214beef97412f09f49b8adbd",
     "34f3d3a4d59ce18d0e983e22",
-    "5dd58ca913e15df72ad88c09"
+    "5dd58ca913e15df72ad88c09",
+    "f6598c4c9adf0907b5c1319e",
+    "d82389c8f9101cd6f9c8714d",
+    "ec7ffb41f6da51c23553bb41",
+    "3bec0988c4314619438cd86b",
+    "466af5fef7686f7f8fda8e2e",
+    "22ea3fad6c844b43386c2848",
+    "a26316bd0fa603119499e74b"
   ],
   "code_last_alert": {
     "ALINAN": "2026-09-17T15:24:23.807883+00:00",
@@ -232,7 +239,7 @@
     "YATIRIM": "2026-09-17T15:24:23.807883+00:00",
     "YOKTUR": "2026-09-17T15:24:23.807883+00:00"
   },
-  "updated_at": "2026-09-17T16:57:46.634526+00:00",
+  "updated_at": "2026-09-17T17:03:43.238560+00:00",
   "health": {
     "primary_failure_streak": 0,
     "last_health_alert": null
