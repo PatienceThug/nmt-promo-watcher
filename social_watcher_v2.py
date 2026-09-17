@@ -1,15 +1,16 @@
 import json
-import os
 import re
 import subprocess
 from datetime import datetime, timezone
 
 import requests
+from bs4 import BeautifulSoup
 import social_watcher as s
 
-X_BEARER_TOKEN = os.environ.get("X_BEARER_TOKEN", "").strip()
+# FREE MODE ONLY: no paid X API calls are made from this watcher.
+# Official X is read from X's public syndication timeline when available;
+# public mentions are discovered through free web indexes.
 
-# Turkish phrase support + broader social discovery terms.
 s.X_QUERIES_FAST = list(dict.fromkeys(s.X_QUERIES_FAST + [
     'site:x.com/nmt_off "promosyon kodu"',
 ]))
@@ -45,77 +46,88 @@ s.DIRECT_PATTERNS = [
     ),
 ]
 
+SYNDICATION_URL = "https://syndication.twitter.com/srv/timeline-profile/screen-name/nmt_off"
 
-def x_api_search(query, label):
-    if not X_BEARER_TOKEN:
-        return []
-    try:
-        r = requests.get(
-            "https://api.x.com/2/tweets/search/recent",
-            headers={"Authorization": f"Bearer {X_BEARER_TOKEN}"},
-            params={
-                "query": query,
-                "max_results": 100,
-                "tweet.fields": "created_at,author_id",
-            },
-            timeout=25,
-        )
-        if r.status_code in (401, 402, 403, 429):
-            print(f"[SOCIAL WARN] X API {label}: HTTP {r.status_code}")
-            return []
-        r.raise_for_status()
-        events = []
-        for post in (r.json().get("data") or []):
-            text = post.get("text") or ""
-            post_id = post.get("id") or ""
-            url = f"https://x.com/i/web/status/{post_id}" if post_id else "https://x.com/"
-            for code, context in s.extract_codes(text).items():
-                events.append(
-                    s.event(
-                        code,
-                        f"X API: {label}",
-                        url,
-                        context,
-                        post.get("created_at"),
-                        "x-api",
-                    )
+
+def _twitter_time(value):
+    if not value:
+        return None
+    for fmt in ("%a %b %d %H:%M:%S %z %Y", "%Y-%m-%dT%H:%M:%S.%fZ", "%Y-%m-%dT%H:%M:%SZ"):
+        try:
+            dt = datetime.strptime(value, fmt)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt.astimezone(timezone.utc)
+        except Exception:
+            pass
+    return None
+
+
+def _tweet_objects(obj):
+    if isinstance(obj, dict):
+        legacy = obj.get("legacy")
+        if isinstance(legacy, dict) and legacy.get("full_text"):
+            yield legacy, str(obj.get("rest_id") or legacy.get("id_str") or "")
+        elif obj.get("full_text"):
+            yield obj, str(obj.get("id_str") or obj.get("id") or "")
+        for value in obj.values():
+            yield from _tweet_objects(value)
+    elif isinstance(obj, list):
+        for value in obj:
+            yield from _tweet_objects(value)
+
+
+def scan_official_x_free():
+    r = requests.get(
+        SYNDICATION_URL,
+        headers={
+            "User-Agent": "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 Chrome/124.0 Mobile Safari/537.36"
+        },
+        timeout=25,
+    )
+    r.raise_for_status()
+    soup = BeautifulSoup(r.text, "html.parser")
+    script = soup.find("script", id="__NEXT_DATA__")
+    if not script or not script.string:
+        raise RuntimeError("X syndication page missing __NEXT_DATA__")
+    data = json.loads(script.string)
+
+    events = []
+    now = datetime.now(timezone.utc)
+    seen_ids = set()
+    for legacy, post_id in _tweet_objects(data):
+        text = legacy.get("full_text") or ""
+        if post_id and post_id in seen_ids:
+            continue
+        if post_id:
+            seen_ids.add(post_id)
+        published_dt = _twitter_time(legacy.get("created_at"))
+        # Only trust fresh syndication posts. This prevents newly-added free sources
+        # from resurrecting historical promo codes.
+        if not published_dt or (now - published_dt).total_seconds() > 12 * 3600:
+            continue
+        url = f"https://x.com/nmt_off/status/{post_id}" if post_id else "https://x.com/nmt_off"
+        for code, context in s.extract_codes(text).items():
+            events.append(
+                s.event(
+                    code,
+                    "X official @nmt_off (free syndication)",
+                    url,
+                    context,
+                    published_dt.isoformat(),
+                    "x-syndication",
                 )
-        print(f"[SOCIAL] X API {label}: {len(events)} promo event(s)")
-        return events
-    except Exception as exc:
-        print(f"[SOCIAL WARN] X API {label}: {exc}")
-        return []
+            )
+    print(f"[SOCIAL] free X syndication: {len(events)} promo event(s)")
+    return events
 
 
-_original_official = s.scan_official_x
 _original_search = s.scan_x_search
 
 
-def scan_official_with_api():
-    events = []
-    try:
-        events.extend(_original_official())
-    except Exception as exc:
-        print(f"[SOCIAL WARN] X official fallback: {exc}")
-    events.extend(
-        x_api_search(
-            'from:nmt_off ("nmt.gg" OR promo OR promocode OR promokod OR "promo kod" OR "promosyon kodu" OR промокод) -is:retweet',
-            "official @nmt_off",
-        )
-    )
-    return events
-
-
-def scan_search_with_api(deep=False):
-    events = _original_search(deep=deep)
-    if X_BEARER_TOKEN:
-        events.extend(
-            x_api_search(
-                '("nmt.gg" OR #NMTGG OR @nmt_off) (promo OR promocode OR promokod OR "promo kod" OR "promosyon kodu" OR промокод) -is:retweet',
-                "NMT public mentions",
-            )
-        )
-    return events
+def scan_search_free(deep=False):
+    # Free discovery of public X posts through web indexes. No X API credits used.
+    return _original_search(deep=deep)
 
 
 def scan_youtube_tags_fixed():
@@ -186,8 +198,8 @@ def scan_youtube_tags_fixed():
     return events
 
 
-s.scan_official_x = scan_official_with_api
-s.scan_x_search = scan_search_with_api
+s.scan_official_x = scan_official_x_free
+s.scan_x_search = scan_search_free
 s.scan_youtube_tags = scan_youtube_tags_fixed
 
 if __name__ == "__main__":
