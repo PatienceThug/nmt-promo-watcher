@@ -7,7 +7,7 @@ import subprocess
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
-from urllib.parse import quote_plus
+from urllib.parse import quote_plus, urlparse
 
 import requests
 from bs4 import BeautifulSoup
@@ -92,6 +92,7 @@ DIRECT_PATTERNS = [
 ]
 
 BAD = {
+    "YARARLANABILIRSINIZ", "YATIRIM", "YOKTUR", "VARLIKLAR", "TAVSIYESI", "TARAFINDA", "SISTEMIYLE", "SISTEMINDEN", "PLATFORMLAR", "PLATFORMDAKI", "MODELLERINIZI", "MODELLER", "KULLANARAK", "KRIPTOMASTER", "KRIPTO", "KAZANABILIR", "GARANTISI", "FIRSATLARDAN", "FARKLI", "ETMEYE", "EDIYORUZ", "EDIYOR", "DETAYLI", "ALINAN", "BLOCKS", "AVAILABLE", "EXPIRED", "REDEEM", "LIMITED",
     "PROMOCODE", "PROMOKOD", "PROMO-CODE", "WELCOME", "TELEGRAM",
     "YOUTUBE", "BONUSCODE", "GIFTCODE", "POWERBLOCKS", "DISCORD",
     "INSTAGRAM", "TWITTER", "NMT.GG", "HTTPS", "STARTAPP", "MARKETPLACE",
@@ -156,28 +157,26 @@ def clean_code(code: str):
     return code
 
 
-def extract_codes(text: str):
+def extract_codes(text):
+    # Only take candidates directly attached to a promo label. Never turn an
+    # entire paragraph into uppercase candidates: prose is not code evidence.
     compact = " ".join((text or "").split())
     found = {}
-
     for pattern in DIRECT_PATTERNS:
         for match in pattern.finditer(compact):
-            code = clean_code(match.group(1))
-            if code:
-                start = max(0, match.start() - 160)
-                end = min(len(compact), match.end() + 280)
-                found[code] = compact[start:end]
-
-    # Secondary recovery path: catches codes formatted oddly but only near a promo keyword.
-    for keyword in KEYWORDS.finditer(compact):
-        window = compact[max(0, keyword.start() - 180): keyword.end() + 340]
-        for raw in re.findall(r"\b[A-Z0-9][A-Z0-9_\-]{4,31}\b", window.upper()):
-            code = clean_code(raw)
-            if not code or code in found:
+            raw = match.group(1)
+            begin, end = match.span(1)
+            if begin and (compact[begin - 1].isalnum() or compact[begin - 1] in "_-"):
                 continue
-            if any(c.isdigit() for c in code) or len(code) >= 6:
-                found[code] = window
-
+            if end < len(compact) and (compact[end].isalnum() or compact[end] in "_-"):
+                continue
+            code = clean_code(raw)
+            if not code:
+                continue
+            # Letter-only codes need explicit original uppercase formatting.
+            if not any(ch.isdigit() for ch in raw) and raw != raw.upper():
+                continue
+            found[code] = compact[max(0, match.start() - 160):match.end() + 280]
     return found
 
 
@@ -363,11 +362,29 @@ def activation_hint(context):
     return None
 
 
+def source_identity(event):
+    # Public Telegram mirrors are copies of the same publisher.
+    name = (event.get("source") or "").strip()
+    for prefix in ("TG.ME ", "Telemetr "):
+        if name.startswith(prefix):
+            name = name[len(prefix):]
+    if name in TELEGRAM_CHANNELS:
+        return "telegram:" + TELEGRAM_CHANNELS[name].lower()
+    parsed = urlparse(event.get("url") or "")
+    if parsed.hostname in ("t.me", "tg.me", "telegram.me"):
+        parts = parsed.path.strip("/").split("/")
+        if parts and parts[0] == "s":
+            parts = parts[1:]
+        if parts:
+            return "telegram:" + parts[0].lower()
+    return (parsed.hostname or name).lower()
+
+
 def confidence(events):
     kinds = {e.get("kind") for e in events}
     recent_direct = any(e.get("kind") == "telegram" and is_recent(e, 48) for e in events)
     recent_yt = any(e.get("kind") == "youtube" and is_recent(e, 72) for e in events)
-    independent = len({e.get("source") for e in events})
+    independent = len({source_identity(e) for e in events})
     if recent_direct or independent >= 2:
         return "Yüksek"
     if recent_yt or "mirror" in kinds:
@@ -440,7 +457,7 @@ def eligible_group(events, code_seen_before):
 
     # For timestamp-less mirrors/search results, demand corroboration unless the code
     # has never been seen before. This prevents a new mirror from resurrecting stale codes.
-    independent = len({e.get("source") for e in events})
+    independent = len({source_identity(e) for e in events})
     if independent >= 2 and not code_seen_before:
         return True
     return False

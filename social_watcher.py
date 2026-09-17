@@ -71,6 +71,7 @@ DIRECT_PATTERNS = [
 ]
 
 BAD = {
+    "YARARLANABILIRSINIZ", "YATIRIM", "YOKTUR", "VARLIKLAR", "TAVSIYESI", "TARAFINDA", "SISTEMIYLE", "SISTEMINDEN", "PLATFORMLAR", "PLATFORMDAKI", "MODELLERINIZI", "MODELLER", "KULLANARAK", "KRIPTOMASTER", "KRIPTO", "KAZANABILIR", "GARANTISI", "FIRSATLARDAN", "FARKLI", "ETMEYE", "EDIYORUZ", "EDIYOR", "DETAYLI", "ALINAN", "BLOCKS", "AVAILABLE", "EXPIRED", "REDEEM", "LIMITED",
     "PROMOCODE", "PROMOKOD", "PROMO-CODE", "NMTGG", "NMT.GG", "YOUTUBE",
     "TWITTER", "TELEGRAM", "DISCORD", "HTTPS", "GIVEAWAY", "ACTIVATION",
     "ACTIVATIONS", "REGISTER", "REFERRAL", "MARKETPLACE", "COLLECTION",
@@ -114,23 +115,25 @@ def clean_code(value):
 
 
 def extract_codes(text):
+    # Only take candidates directly attached to a promo label. Never turn an
+    # entire paragraph into uppercase candidates: prose is not code evidence.
     compact = " ".join((text or "").split())
     found = {}
-
     for pattern in DIRECT_PATTERNS:
         for match in pattern.finditer(compact):
-            code = clean_code(match.group(1))
-            if code:
-                found[code] = compact[max(0, match.start() - 180): min(len(compact), match.end() + 320)]
-
-    for kw in PROMO_WORDS.finditer(compact):
-        window = compact[max(0, kw.start() - 220): min(len(compact), kw.end() + 380)]
-        for raw in re.findall(r"\b[A-Z0-9][A-Z0-9_\-]{4,31}\b", window.upper()):
-            code = clean_code(raw)
-            if not code or code in found:
+            raw = match.group(1)
+            begin, end = match.span(1)
+            if begin and (compact[begin - 1].isalnum() or compact[begin - 1] in "_-"):
                 continue
-            if any(ch.isdigit() for ch in code) or len(code) >= 7:
-                found[code] = window
+            if end < len(compact) and (compact[end].isalnum() or compact[end] in "_-"):
+                continue
+            code = clean_code(raw)
+            if not code:
+                continue
+            # Letter-only codes need explicit original uppercase formatting.
+            if not any(ch.isdigit() for ch in raw) and raw != raw.upper():
+                continue
+            found[code] = compact[max(0, match.start() - 160):match.end() + 280]
     return found
 
 
