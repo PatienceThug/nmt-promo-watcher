@@ -111,21 +111,27 @@ def save_state(state):
 def get_alert_issues():
     if not REPO or not GITHUB_TOKEN:
         raise RuntimeError("GitHub repository/token missing")
-    r = requests.get(
-        f"https://api.github.com/repos/{REPO}/issues",
-        headers=github_headers(),
-        params={"state": "all", "per_page": 75, "sort": "created", "direction": "desc"},
-        timeout=20,
-    )
-    r.raise_for_status()
     alerts = []
-    for item in r.json():
-        if "pull_request" in item:
-            continue
-        title = item.get("title") or ""
-        if title.startswith("🚨 NMT PROMO:") or title.startswith("⚠️ NMT WATCHER HEALTH:"):
-            alerts.append(item)
-    return alerts
+    page = 1
+    while True:
+        r = requests.get(
+            f"https://api.github.com/repos/{REPO}/issues",
+            headers=github_headers(),
+            params={"state": "all", "per_page": 100, "sort": "created",
+                    "direction": "desc", "page": page},
+            timeout=20,
+        )
+        r.raise_for_status()
+        items = r.json()
+        for item in items:
+            if "pull_request" in item:
+                continue
+            title = item.get("title") or ""
+            if title.startswith(("🚨 NMT PROMO:", "⚠️ NMT WATCHER HEALTH:")):
+                alerts.append(item)
+        if len(items) < 100:
+            return alerts
+        page += 1
 
 
 def extract_urls(body: str):
@@ -171,6 +177,9 @@ def alert_message(issue):
             parts += ["", f"GitHub kaydı: {issue_url}"]
         return "\n".join(parts)
 
+    if title.startswith("⚠️ NMT WATCHER HEALTH: Workflow"):
+        return f"⚠️ NMT taraması başarısız oldu.\n\nDetay: {issue_url}"
+
     return (
         "⚠️ NMT WATCHER KAYNAK UYARISI\n\n"
         "Ana kaynakların bir kısmı art arda erişilemedi. Sistem yedek kaynaklarla çalışmaya devam ediyor.\n\n"
@@ -180,8 +189,7 @@ def alert_message(issue):
 
 def main():
     if not BOT_TOKEN:
-        print("[TG] TELEGRAM_BOT_TOKEN not configured yet")
-        return
+        raise RuntimeError("TELEGRAM_BOT_TOKEN eksik; Telegram bildirimleri gönderilemiyor")
 
     get_bot_identity()
     state = load_state()
@@ -195,8 +203,7 @@ def main():
             print("[TG] Telegram private chat discovered and protected in state")
 
     if not chat_id:
-        print("[TG] No Telegram chat found. Send /start to the connected bot and wait for the next run.")
-        return
+        raise RuntimeError("Telegram sohbeti bulunamadı; TELEGRAM_CHAT_ID ayarını kontrol edin")
 
     issues = get_alert_issues()
     sent = set(int(x) for x in state.get("sent_issue_numbers", []))
@@ -221,6 +228,8 @@ def main():
         if send_telegram(alert_message(issue), chat_id):
             sent.add(int(issue["number"]))
             delivered += 1
+            state["sent_issue_numbers"] = sorted(sent)
+            save_state(state)
 
     if unseen:
         state["sent_issue_numbers"] = sorted(sent)

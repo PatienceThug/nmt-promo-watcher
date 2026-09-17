@@ -15,7 +15,7 @@ on:
       - "requirements.txt"
       - ".github/workflows/watch.yml"
   schedule:
-    # One run every five minutes prevents overlapping scans and stale queues.
+    # Five-minute target; GitHub may delay runs. Concurrency prevents overlap.
     - cron: "*/5 * * * *"
   workflow_dispatch:
 
@@ -92,7 +92,25 @@ jobs:
           PYTHONUNBUFFERED: "1"
         run: python social_watcher_v3.py --mode "${{ steps.mode.outputs.mode }}"
 
+      - name: Record scan failure in GitHub Issues
+        if: ${{ failure() }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = "⚠️ NMT WATCHER HEALTH: Workflow " + context.runId;
+            const body = "NMT taraması başarısız oldu. Yeni kodlar kaçırılmış olabilir.\n\n" +
+              "Çalıştırma: " + context.serverUrl + "/" + context.repo.owner + "/" +
+              context.repo.repo + "/actions/runs/" + context.runId;
+            const issues = await github.paginate(github.rest.issues.listForRepo, {
+              ...context.repo, state: "all", per_page: 100
+            });
+            if (!issues.some(issue => !issue.pull_request && issue.title === title)) {
+              await github.rest.issues.create({...context.repo, title, body});
+            }
+
       - name: Send Telegram push notifications
+        id: notify
+        if: ${{ !cancelled() }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
@@ -102,6 +120,8 @@ jobs:
         run: python telegram_notify.py
 
       - name: Persist watcher state
+        id: persist
+        if: ${{ !cancelled() }}
         shell: bash
         run: |
           git config user.name "github-actions[bot]"
@@ -133,3 +153,18 @@ jobs:
           git commit -m "Update NMT promo watcher state"
           git push
 
+      - name: Record notification or state failure
+        if: ${{ failure() && (steps.notify.outcome == 'failure' || steps.persist.outcome == 'failure') }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = "⚠️ NMT WATCHER HEALTH: Workflow delivery " + context.runId;
+            const body = "Telegram bildirimi veya durum kaydı başarısız oldu. GitHub Issues kayıtlarını kontrol edin.\n\n" +
+              context.serverUrl + "/" + context.repo.owner + "/" + context.repo.repo +
+              "/actions/runs/" + context.runId;
+            const issues = await github.paginate(github.rest.issues.listForRepo, {
+              ...context.repo, state: "all", per_page: 100
+            });
+            if (!issues.some(issue => !issue.pull_request && issue.title === title)) {
+              await github.rest.issues.create({...context.repo, title, body});
+            }
