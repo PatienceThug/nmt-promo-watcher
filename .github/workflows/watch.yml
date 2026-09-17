@@ -1,4 +1,5 @@
 name: NMT Promo Watcher
+# X API secret verification trigger
 
 on:
   push:
