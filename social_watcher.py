@@ -21,7 +21,7 @@ NOW = datetime.now(timezone.utc)
 
 OFFICIAL_X_HANDLE = "nmt_off"
 OFFICIAL_X_URL = f"https://x.com/{OFFICIAL_X_HANDLE}"
-JINA_X_URL = f"https://r.jina.ai/https://x.com/{OFFICIAL_X_HANDLE}"
+JINA_X_URL = f"https://r.jina.ai/http://twitter.com/{OFFICIAL_X_HANDLE}"
 
 X_QUERIES_FAST = [
     'site:x.com/nmt_off "nmt.gg"',
