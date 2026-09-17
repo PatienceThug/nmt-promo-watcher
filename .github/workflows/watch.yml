@@ -9,6 +9,7 @@ on:
       - "watcher_v4.py"
       - "social_watcher.py"
       - "social_watcher_v2.py"
+      - "social_watcher_v3.py"
       - "telegram_notify.py"
       - "requirements.txt"
       - ".github/workflows/watch.yml"
@@ -33,7 +34,7 @@ concurrency:
 jobs:
   scan:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 10
 
     steps:
       - name: Checkout
@@ -56,6 +57,7 @@ jobs:
           python -m py_compile watcher_v4.py
           python -m py_compile social_watcher.py
           python -m py_compile social_watcher_v2.py
+          python -m py_compile social_watcher_v3.py
           python -m py_compile telegram_notify.py
 
       - name: Choose fast or deep scan
@@ -70,7 +72,7 @@ jobs:
             echo "Deep scan forced by $event"
           elif (( run_no % 5 == 0 )); then
             echo "mode=deep" >> "$GITHUB_OUTPUT"
-            echo "Deep scan: Telegram + mirrors + web + free X + YouTube"
+            echo "Deep scan: Telegram + mirrors + web + free X + YouTube metadata/comments/Shorts"
           else
             echo "mode=fast" >> "$GITHUB_OUTPUT"
             echo "Fast scan: Telegram + NMT pages + free official X"
@@ -84,12 +86,12 @@ jobs:
           PYTHONUNBUFFERED: "1"
         run: python watcher_v4.py --mode "${{ steps.mode.outputs.mode }}"
 
-      - name: Scan free X and YouTube social sources
+      - name: Scan free X YouTube comments and Shorts
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           PYTHONUNBUFFERED: "1"
-        run: python social_watcher_v2.py --mode "${{ steps.mode.outputs.mode }}"
+        run: python social_watcher_v3.py --mode "${{ steps.mode.outputs.mode }}"
 
       - name: Send Telegram push notifications
         env:
@@ -108,6 +110,7 @@ jobs:
 
           [ -f seen_codes.json ] && git add seen_codes.json || true
           [ -f social_state.json ] && git add social_state.json || true
+          [ -f social_state_v3.json ] && git add social_state_v3.json || true
           [ -f telegram_state.json ] && git add telegram_state.json || true
 
           if git diff --cached --quiet; then
