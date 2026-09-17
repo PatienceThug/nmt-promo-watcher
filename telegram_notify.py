@@ -76,10 +76,27 @@ def detect_chat_id_from_updates():
     return ""
 
 
-def send_telegram(text: str, chat_id: str):
+def send_telegram(text: str, chat_id: str, copy_code: str = ""):
+    payload = {"chat_id": chat_id, "text": text, "disable_web_page_preview": True}
+    if copy_code and 1 <= len(copy_code) <= 256:
+        payload["reply_markup"] = {
+            "inline_keyboard": [[
+                {"text": "📋 Kodu kopyala", "copy_text": {"text": copy_code}}
+            ]]
+        }
+        # Telegram entity offsets use UTF-16, including the leading emoji.
+        marker = "KOD: " + copy_code
+        start = text.find(marker)
+        if start >= 0:
+            start += len("KOD: ")
+            payload["entities"] = [{
+                "type": "code",
+                "offset": len(text[:start].encode("utf-16-le")) // 2,
+                "length": len(copy_code.encode("utf-16-le")) // 2,
+            }]
     r = requests.post(
         f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
-        json={"chat_id": chat_id, "text": text, "disable_web_page_preview": True},
+        json=payload,
         timeout=20,
     )
     r.raise_for_status()
@@ -224,7 +241,9 @@ def main():
     unseen = [issue for issue in reversed(issues) if int(issue["number"]) not in sent]
     delivered = 0
     for issue in unseen:
-        if send_telegram(alert_message(issue), chat_id):
+        title = issue.get("title") or ""
+        copy_code = title.split(":", 1)[1].strip() if title.startswith("🚨 NMT PROMO:") else ""
+        if send_telegram(alert_message(issue), chat_id, copy_code=copy_code):
             sent.add(int(issue["number"]))
             delivered += 1
             state["sent_issue_numbers"] = sorted(sent)
