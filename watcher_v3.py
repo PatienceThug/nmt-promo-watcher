@@ -125,9 +125,24 @@ HTTP = session()
 
 
 def fetch_html(url: str, timeout=16):
-    r = HTTP.get(url, timeout=timeout)
-    r.raise_for_status()
-    return r.text
+    try:
+        r = HTTP.get(url, timeout=timeout)
+        r.raise_for_status()
+        return r.text
+    except requests.HTTPError:
+        # NMT blocks many cloud-runner IPs with 403. Jina Reader is a free,
+        # read-only fallback that returns the public page as text.
+        if url.startswith("https://nmt.gg/"):
+            fallback = "https://r.jina.ai/http://" + url.removeprefix("https://")
+            r = HTTP.get(
+                fallback,
+                headers={"X-Cache-Tolerance": "0", "X-Retain-Images": "none"},
+                timeout=max(timeout, 30),
+            )
+            r.raise_for_status()
+            print(f"[FALLBACK] NMT via reader: {url}")
+            return r.text
+        raise
 
 
 def clean_code(code: str):
