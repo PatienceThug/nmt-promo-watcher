@@ -30,8 +30,7 @@ def get_bot_identity():
     data = r.json()
     if not data.get("ok"):
         return ""
-    result = data.get("result") or {}
-    username = result.get("username") or ""
+    username = (data.get("result") or {}).get("username") or ""
     if username:
         print(f"[TG] Connected bot: @{username}")
     return username
@@ -62,15 +61,11 @@ def recover_chat_id(value: str):
 def detect_chat_id_from_updates():
     if not BOT_TOKEN:
         return ""
-    r = requests.get(
-        f"https://api.telegram.org/bot{BOT_TOKEN}/getUpdates",
-        timeout=20,
-    )
+    r = requests.get(f"https://api.telegram.org/bot{BOT_TOKEN}/getUpdates", timeout=20)
     r.raise_for_status()
     data = r.json()
     if not data.get("ok"):
         return ""
-
     updates = data.get("result", [])
     print(f"[TG] getUpdates returned {len(updates)} update(s)")
     for update in reversed(updates):
@@ -82,17 +77,9 @@ def detect_chat_id_from_updates():
 
 
 def send_telegram(text: str, chat_id: str):
-    if not BOT_TOKEN or not chat_id:
-        print("[TG] Telegram destination unavailable; notification skipped")
-        return False
-
     r = requests.post(
         f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
-        json={
-            "chat_id": chat_id,
-            "text": text,
-            "disable_web_page_preview": True,
-        },
+        json={"chat_id": chat_id, "text": text, "disable_web_page_preview": True},
         timeout=20,
     )
     r.raise_for_status()
@@ -117,72 +104,78 @@ def load_state():
 
 def save_state(state):
     state["updated_at"] = datetime.now(timezone.utc).isoformat()
-    state["sent_issue_numbers"] = state["sent_issue_numbers"][-1000:]
-    STATE_PATH.write_text(
-        json.dumps(state, indent=2, ensure_ascii=False),
-        encoding="utf-8",
-    )
+    state["sent_issue_numbers"] = state["sent_issue_numbers"][-1500:]
+    STATE_PATH.write_text(json.dumps(state, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
-def get_promo_issues():
+def get_alert_issues():
     if not REPO or not GITHUB_TOKEN:
         raise RuntimeError("GitHub repository/token missing")
-
     r = requests.get(
         f"https://api.github.com/repos/{REPO}/issues",
         headers=github_headers(),
-        params={
-            "state": "all",
-            "per_page": 50,
-            "sort": "created",
-            "direction": "desc",
-        },
+        params={"state": "all", "per_page": 75, "sort": "created", "direction": "desc"},
         timeout=20,
     )
     r.raise_for_status()
-    issues = []
+    alerts = []
     for item in r.json():
         if "pull_request" in item:
             continue
         title = item.get("title") or ""
-        if title.startswith("🚨 NMT PROMO:"):
-            issues.append(item)
-    return issues
+        if title.startswith("🚨 NMT PROMO:") or title.startswith("⚠️ NMT WATCHER HEALTH:"):
+            alerts.append(item)
+    return alerts
 
 
-def extract_source_lines(body: str):
-    lines = []
+def extract_urls(body: str):
+    urls = []
     for raw in (body or "").splitlines():
-        line = raw.strip()
-        if line.startswith("http://") or line.startswith("https://"):
-            lines.append(line)
-        elif "http://" in line or "https://" in line:
-            for part in line.split():
-                if part.startswith(("http://", "https://")):
-                    lines.append(part.rstrip(")].,>"))
-        if len(lines) >= 3:
+        for part in raw.strip().split():
+            if part.startswith(("http://", "https://")):
+                url = part.rstrip(")].,>")
+                if url not in urls:
+                    urls.append(url)
+        if len(urls) >= 3:
             break
-    return lines
+    return urls
 
 
-def promo_message(issue):
+def extract_field(body: str, marker: str):
+    for raw in (body or "").splitlines():
+        line = raw.strip().replace("**", "")
+        if line.lower().startswith(marker.lower()):
+            return line.split(":", 1)[1].strip() if ":" in line else ""
+    return ""
+
+
+def alert_message(issue):
     title = issue.get("title") or ""
-    code = title.split(":", 1)[1].strip() if ":" in title else title
+    body = issue.get("body") or ""
     issue_url = issue.get("html_url") or ""
-    sources = extract_source_lines(issue.get("body") or "")
 
-    parts = [
-        "🚨 NMT PROMO KODU YAKALANDI",
-        "",
-        f"KOD: {code}",
-        "",
-        "Mümkün olduğunca hızlı dene; kullanım limiti olabilir.",
-    ]
-    if sources:
-        parts += ["", "Kaynak:", *sources]
-    if issue_url:
-        parts += ["", f"GitHub kaydı: {issue_url}"]
-    return "\n".join(parts)
+    if title.startswith("🚨 NMT PROMO:"):
+        code = title.split(":", 1)[1].strip()
+        confidence = extract_field(body, "Güven")
+        limit = extract_field(body, "İlanda görülen limit")
+        urls = extract_urls(body)
+        parts = ["🚨 NMT PROMO KODU YAKALANDI", "", f"KOD: {code}"]
+        if confidence:
+            parts.append(f"Güven: {confidence}")
+        if limit:
+            parts.append(f"Limit: {limit}")
+        parts += ["", "Hızlı dene; kullanım sayısı sınırlı olabilir."]
+        if urls:
+            parts += ["", "Kaynak:", *urls]
+        if issue_url:
+            parts += ["", f"GitHub kaydı: {issue_url}"]
+        return "\n".join(parts)
+
+    return (
+        "⚠️ NMT WATCHER KAYNAK UYARISI\n\n"
+        "Ana kaynakların bir kısmı art arda erişilemedi. Sistem yedek kaynaklarla çalışmaya devam ediyor.\n\n"
+        f"Detay: {issue_url}"
+    )
 
 
 def main():
@@ -191,7 +184,6 @@ def main():
         return
 
     get_bot_identity()
-
     state = load_state()
     chat_id = CHAT_ID or recover_chat_id(state.get("chat_id_enc", ""))
 
@@ -206,15 +198,15 @@ def main():
         print("[TG] No Telegram chat found. Send /start to the connected bot and wait for the next run.")
         return
 
-    issues = get_promo_issues()
+    issues = get_alert_issues()
     sent = set(int(x) for x in state.get("sent_issue_numbers", []))
 
     if not state.get("initialized"):
         sent.update(int(issue["number"]) for issue in issues)
         send_telegram(
             "✅ NMT Promo Watcher aktif.\n\n"
-            "Yeni NMT promo kodu yakalandığında bu sohbetten bildirim göndereceğim. "
-            "GitHub alarmı da yedek olarak açık.",
+            "Yeni promo kodları ve önemli kaynak sağlık sorunları bu sohbetten bildirilecek. "
+            "GitHub kaydı yedek olarak açık.",
             chat_id,
         )
         state["initialized"] = True
@@ -226,7 +218,7 @@ def main():
     unseen = [issue for issue in reversed(issues) if int(issue["number"]) not in sent]
     delivered = 0
     for issue in unseen:
-        if send_telegram(promo_message(issue), chat_id):
+        if send_telegram(alert_message(issue), chat_id):
             sent.add(int(issue["number"]))
             delivered += 1
 
