@@ -1,5 +1,5 @@
 name: NMT Promo Watcher
-# X API secret verification trigger
+# Free-only social monitoring mode
 
 on:
   push:
@@ -70,10 +70,10 @@ jobs:
             echo "Deep scan forced by $event"
           elif (( run_no % 5 == 0 )); then
             echo "mode=deep" >> "$GITHUB_OUTPUT"
-            echo "Deep scan: Telegram + mirrors + web + X + YouTube"
+            echo "Deep scan: Telegram + mirrors + web + free X + YouTube"
           else
             echo "mode=fast" >> "$GITHUB_OUTPUT"
-            echo "Fast scan: Telegram + NMT pages + official X"
+            echo "Fast scan: Telegram + NMT pages + free official X"
           fi
 
       - name: Scan Telegram and web sources
@@ -84,11 +84,10 @@ jobs:
           PYTHONUNBUFFERED: "1"
         run: python watcher_v4.py --mode "${{ steps.mode.outputs.mode }}"
 
-      - name: Scan X and YouTube social sources
+      - name: Scan free X and YouTube social sources
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-          X_BEARER_TOKEN: ${{ secrets.X_BEARER_TOKEN }}
           PYTHONUNBUFFERED: "1"
         run: python social_watcher_v2.py --mode "${{ steps.mode.outputs.mode }}"
 
