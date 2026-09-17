@@ -20,15 +20,39 @@ def github_headers():
     }
 
 
-def send_telegram(text: str):
-    if not BOT_TOKEN or not CHAT_ID:
-        print("[TG] Telegram secrets missing; notification skipped")
+def detect_chat_id():
+    """Best-effort fallback: use the most recent private chat that messaged the bot."""
+    if CHAT_ID:
+        return CHAT_ID
+    if not BOT_TOKEN:
+        return ""
+
+    r = requests.get(
+        f"https://api.telegram.org/bot{BOT_TOKEN}/getUpdates",
+        timeout=20,
+    )
+    r.raise_for_status()
+    data = r.json()
+    if not data.get("ok"):
+        return ""
+
+    for update in reversed(data.get("result", [])):
+        message = update.get("message") or update.get("edited_message") or {}
+        chat = message.get("chat") or {}
+        if chat.get("type") == "private" and chat.get("id") is not None:
+            return str(chat["id"])
+    return ""
+
+
+def send_telegram(text: str, chat_id: str):
+    if not BOT_TOKEN or not chat_id:
+        print("[TG] Telegram destination unavailable; notification skipped")
         return False
 
     r = requests.post(
         f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
         json={
-            "chat_id": CHAT_ID,
+            "chat_id": chat_id,
             "text": text,
             "disable_web_page_preview": True,
         },
@@ -124,9 +148,13 @@ def promo_message(issue):
 
 
 def main():
-    # No credentials yet: exit cleanly so the watcher itself keeps working.
-    if not BOT_TOKEN or not CHAT_ID:
-        print("[TG] TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID not configured yet")
+    if not BOT_TOKEN:
+        print("[TG] TELEGRAM_BOT_TOKEN not configured yet")
+        return
+
+    chat_id = detect_chat_id()
+    if not chat_id:
+        print("[TG] No Telegram chat found. Send /start to the bot, or set TELEGRAM_CHAT_ID.")
         return
 
     issues = get_promo_issues()
@@ -138,8 +166,9 @@ def main():
         sent.update(int(issue["number"]) for issue in issues)
         send_telegram(
             "✅ NMT Promo Watcher aktif.\n\n"
-            "Yeni NMT promo kodu yakalandığında bu sohbetten anında bildirim göndereceğim. "
-            "GitHub alarmı da yedek olarak açık."
+            "Yeni NMT promo kodu yakalandığında bu sohbetten bildirim göndereceğim. "
+            "GitHub alarmı da yedek olarak açık.",
+            chat_id,
         )
         state["initialized"] = True
         state["sent_issue_numbers"] = sorted(sent)
@@ -150,7 +179,7 @@ def main():
     unseen = [issue for issue in reversed(issues) if int(issue["number"]) not in sent]
     delivered = 0
     for issue in unseen:
-        if send_telegram(promo_message(issue)):
+        if send_telegram(promo_message(issue), chat_id):
             sent.add(int(issue["number"]))
             delivered += 1
 
