@@ -124,34 +124,55 @@ jobs:
         if: ${{ !cancelled() }}
         shell: bash
         run: |
+          set -euo pipefail
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
           state_dir="$(mktemp -d)"
+          trap 'rm -rf "$state_dir"' EXIT
           state_files=(seen_codes.json social_state.json social_state_v3.json telegram_state.json)
           for file in "${state_files[@]}"; do
             [ -f "$file" ] && cp "$file" "$state_dir/$file"
           done
 
-          # Rebase cleanly first, then merge this scan's state into the newest
-          # remote state. This avoids losing detections when code/state changes
-          # land while a scan is running.
-          git restore -- "${state_files[@]}" 2>/dev/null || true
-          git pull --rebase origin main
+          # Retry from the latest remote state each time. This survives transient
+          # fetch/push failures and non-fast-forward races without losing detections.
+          for attempt in 1 2 3; do
+            echo "Persist attempt $attempt/3"
 
-          for file in "${state_files[@]}"; do
-            [ -f "$state_dir/$file" ] || continue
-            python merge_state.py "$file" "$state_dir/$file"
-            git add "$file"
+            if ! git fetch origin main; then
+              echo "git fetch failed"
+              sleep $((attempt * 2))
+              continue
+            fi
+
+            git reset --hard origin/main
+
+            for file in "${state_files[@]}"; do
+              [ -f "$state_dir/$file" ] || continue
+              python merge_state.py "$file" "$state_dir/$file"
+              git add "$file"
+            done
+
+            if git diff --cached --quiet; then
+              echo "No state changes"
+              exit 0
+            fi
+
+            git commit -m "Update NMT promo watcher state"
+
+            if git push origin HEAD:main; then
+              echo "Watcher state persisted"
+              exit 0
+            fi
+
+            echo "git push failed; retrying from latest origin/main"
+            sleep $((attempt * 2))
           done
 
-          if git diff --cached --quiet; then
-            echo "No state changes"
-            exit 0
-          fi
-
-          git commit -m "Update NMT promo watcher state"
-          git push
+          echo "State persistence failed after 3 attempts"
+          exit 1
 
       - name: Record notification or state failure
         if: ${{ failure() && (steps.notify.outcome == 'failure' || steps.persist.outcome == 'failure') }}
@@ -159,7 +180,11 @@ jobs:
         with:
           script: |
             const title = "⚠️ NMT WATCHER HEALTH: Workflow delivery " + context.runId;
-            const body = "Telegram bildirimi veya durum kaydı başarısız oldu. GitHub Issues kayıtlarını kontrol edin.\n\n" +
+            const failed = [];
+            if ("${{ steps.notify.outcome }}" === "failure") failed.push("Telegram bildirimi");
+            if ("${{ steps.persist.outcome }}" === "failure") failed.push("durum kaydı");
+            const body = (failed.length ? failed.join(" ve ") : "Teslimat") +
+              " başarısız oldu. Tarama sonucu ayrıca kontrol edilmelidir.\n\n" +
               context.serverUrl + "/" + context.repo.owner + "/" + context.repo.repo +
               "/actions/runs/" + context.runId;
             const issues = await github.paginate(github.rest.issues.listForRepo, {
