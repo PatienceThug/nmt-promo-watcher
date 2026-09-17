@@ -78,48 +78,73 @@ def _tweet_objects(obj):
 
 
 def scan_official_x_free():
-    r = requests.get(
-        SYNDICATION_URL,
-        headers={
-            "User-Agent": "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 Chrome/124.0 Mobile Safari/537.36"
-        },
-        timeout=25,
-    )
-    r.raise_for_status()
-    soup = BeautifulSoup(r.text, "html.parser")
-    script = soup.find("script", id="__NEXT_DATA__")
-    if not script or not script.string:
-        raise RuntimeError("X syndication page missing __NEXT_DATA__")
-    data = json.loads(script.string)
+    try:
+        r = requests.get(
+            SYNDICATION_URL,
+            headers={
+                "User-Agent": "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 Chrome/124.0 Mobile Safari/537.36"
+            },
+            timeout=25,
+        )
+        r.raise_for_status()
+        soup = BeautifulSoup(r.text, "html.parser")
+        script = soup.find("script", id="__NEXT_DATA__")
+        if not script or not script.string:
+            raise RuntimeError("X syndication page missing __NEXT_DATA__")
+        data = json.loads(script.string)
 
-    events = []
-    now = datetime.now(timezone.utc)
-    seen_ids = set()
-    for legacy, post_id in _tweet_objects(data):
-        text = legacy.get("full_text") or ""
-        if post_id and post_id in seen_ids:
-            continue
-        if post_id:
-            seen_ids.add(post_id)
-        published_dt = _twitter_time(legacy.get("created_at"))
-        # Only trust fresh syndication posts. This prevents newly-added free sources
-        # from resurrecting historical promo codes.
-        if not published_dt or (now - published_dt).total_seconds() > 12 * 3600:
-            continue
-        url = f"https://x.com/nmt_off/status/{post_id}" if post_id else "https://x.com/nmt_off"
+        events = []
+        now = datetime.now(timezone.utc)
+        seen_ids = set()
+        for legacy, post_id in _tweet_objects(data):
+            text = legacy.get("full_text") or ""
+            if post_id and post_id in seen_ids:
+                continue
+            if post_id:
+                seen_ids.add(post_id)
+            published_dt = _twitter_time(legacy.get("created_at"))
+            if not published_dt or (now - published_dt).total_seconds() > 12 * 3600:
+                continue
+            url = f"https://x.com/nmt_off/status/{post_id}" if post_id else "https://x.com/nmt_off"
+            for code, context in s.extract_codes(text).items():
+                events.append(
+                    s.event(
+                        code,
+                        "X official @nmt_off (free syndication)",
+                        url,
+                        context,
+                        published_dt.isoformat(),
+                        "x-syndication",
+                    )
+                )
+        print(f"[SOCIAL] free X syndication: {len(events)} promo event(s)")
+        return events
+    except Exception as exc:
+        # X syndication is frequently rate-limited. The public Jina reader keeps
+        # discovery alive without a paid X API. Its untimestamped evidence is
+        # intentionally not considered fresh unless another source confirms it.
+        print(f"[SOCIAL FALLBACK] X syndication unavailable: {exc}")
+        text = s.fetch_text(
+            s.JINA_X_URL,
+            headers={"X-Cache-Tolerance": "0", "X-Retain-Images": "none"},
+            timeout=35,
+        )
+        if "nmt" not in text.lower():
+            raise RuntimeError("official X reader returned unexpected content")
+        events = []
         for code, context in s.extract_codes(text).items():
             events.append(
                 s.event(
                     code,
-                    "X official @nmt_off (free syndication)",
-                    url,
+                    "X official @nmt_off (public reader)",
+                    s.OFFICIAL_X_URL,
                     context,
-                    published_dt.isoformat(),
-                    "x-syndication",
+                    None,
+                    "x-reader",
                 )
             )
-    print(f"[SOCIAL] free X syndication: {len(events)} promo event(s)")
-    return events
+        print(f"[SOCIAL] public X reader: {len(events)} promo event(s)")
+        return events
 
 
 _original_search = s.scan_x_search
