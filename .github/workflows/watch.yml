@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - "watcher.py"
+      - "telegram_notify.py"
       - "requirements.txt"
       - ".github/workflows/watch.yml"
   schedule:
@@ -46,7 +47,9 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Verify watcher syntax
-        run: python -m py_compile watcher.py
+        run: |
+          python -m py_compile watcher.py
+          python -m py_compile telegram_notify.py
 
       - name: Choose fast or deep scan
         id: mode
@@ -69,17 +72,23 @@ jobs:
           PYTHONUNBUFFERED: "1"
         run: python watcher.py --mode "${{ steps.mode.outputs.mode }}"
 
+      - name: Send Telegram push notifications
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          PYTHONUNBUFFERED: "1"
+        run: python telegram_notify.py
+
       - name: Persist watcher state
         shell: bash
         run: |
-          if [ ! -f seen_codes.json ]; then
-            echo "No state file yet"
-            exit 0
-          fi
-
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add seen_codes.json
+
+          [ -f seen_codes.json ] && git add seen_codes.json || true
+          [ -f telegram_state.json ] && git add telegram_state.json || true
 
           if git diff --cached --quiet; then
             echo "No state changes"
