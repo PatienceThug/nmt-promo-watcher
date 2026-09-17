@@ -1,17 +1,16 @@
 name: NMT Promo Watcher
-# Telegram secret verification trigger
 
 on:
   push:
     branches: [main]
     paths:
-      - "watcher.py"
+      - "watcher_v3.py"
       - "telegram_notify.py"
       - "requirements.txt"
       - ".github/workflows/watch.yml"
   schedule:
-    # GitHub officially supports 5-minute cron intervals per schedule.
-    # Five staggered schedules give us an attempted scan every minute.
+    # Each cron obeys GitHub's 5-minute minimum. Staggering them attempts a scan
+    # roughly every minute, but GitHub may still delay scheduled jobs under load.
     - cron: "*/5 * * * *"
     - cron: "1-59/5 * * * *"
     - cron: "2-59/5 * * * *"
@@ -30,7 +29,7 @@ concurrency:
 jobs:
   scan:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 6
 
     steps:
       - name: Checkout
@@ -49,20 +48,28 @@ jobs:
 
       - name: Verify watcher syntax
         run: |
-          python -m py_compile watcher.py
+          python -m py_compile watcher_v3.py
           python -m py_compile telegram_notify.py
 
       - name: Choose fast or deep scan
         id: mode
         shell: bash
         run: |
-          minute=$(date -u +%M)
-          if (( 10#$minute % 5 == 0 )); then
+          event="${{ github.event_name }}"
+          run_no="${{ github.run_number }}"
+
+          # Manual/push runs get the full scan. For schedules, use run number
+          # instead of wall-clock minute so GitHub scheduling delays cannot
+          # accidentally prevent deep scans.
+          if [[ "$event" == "workflow_dispatch" || "$event" == "push" ]]; then
             echo "mode=deep" >> "$GITHUB_OUTPUT"
-            echo "Deep scan: Telegram + NMT + mirrors + web search + YouTube"
+            echo "Deep scan forced by $event"
+          elif (( run_no % 5 == 0 )); then
+            echo "mode=deep" >> "$GITHUB_OUTPUT"
+            echo "Deep scan: Telegram + mirrors + web search + YouTube"
           else
             echo "mode=fast" >> "$GITHUB_OUTPUT"
-            echo "Fast scan: Telegram + NMT official pages"
+            echo "Fast scan: direct Telegram + opportunistic NMT pages"
           fi
 
       - name: Scan for new promo codes
@@ -71,7 +78,7 @@ jobs:
           GITHUB_REPOSITORY: ${{ github.repository }}
           ALERT_THREAD: "1"
           PYTHONUNBUFFERED: "1"
-        run: python watcher.py --mode "${{ steps.mode.outputs.mode }}"
+        run: python watcher_v3.py --mode "${{ steps.mode.outputs.mode }}"
 
       - name: Send Telegram push notifications
         env:
@@ -97,4 +104,5 @@ jobs:
           fi
 
           git commit -m "Update NMT promo watcher state"
+          git pull --rebase origin main
           git push
