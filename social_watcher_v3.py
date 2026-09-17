@@ -125,6 +125,58 @@ def is_nmt_related(text):
     )
 
 
+def _decode_json_string(value):
+    try:
+        return json.loads('"' + value + '"')
+    except Exception:
+        return value.replace("\\n", " ").replace("\\u0026", "&")
+
+
+def discover_youtube_html(query, limit=8):
+    """Free fallback when yt-dlp/YouTube search yields no rows on cloud IPs."""
+    search_url = "https://www.youtube.com/results"
+    r = requests.get(
+        search_url,
+        params={"search_query": query, "sp": "CAI%3D"},
+        headers=UA,
+        timeout=25,
+    )
+    r.raise_for_status()
+    ids = list(dict.fromkeys(re.findall(r'"videoId":"([A-Za-z0-9_-]{11})"', r.text)))
+    items = []
+    for video_id in ids[:limit]:
+        url = f"https://www.youtube.com/watch?v={video_id}"
+        try:
+            page = requests.get(url, headers=UA, timeout=20)
+            page.raise_for_status()
+            body = page.text
+            title_m = re.search(r'"title":"((?:\\\\.|[^"\\\\])*)"', body)
+            desc_m = re.search(r'"shortDescription":"((?:\\\\.|[^"\\\\])*)"', body)
+            date_m = re.search(r'"publishDate":"(\d{4}-\d{2}-\d{2})"', body)
+            title = _decode_json_string(title_m.group(1)) if title_m else ""
+            desc = _decode_json_string(desc_m.group(1)) if desc_m else ""
+            published = None
+            if date_m:
+                published = datetime.strptime(date_m.group(1), "%Y-%m-%d").replace(
+                    tzinfo=timezone.utc
+                ).isoformat()
+            items.append(
+                {
+                    "id": video_id,
+                    "webpage_url": url,
+                    "title": title,
+                    "description": desc,
+                    "timestamp": (
+                        datetime.fromisoformat(published).timestamp() if published else None
+                    ),
+                }
+            )
+        except Exception as exc:
+            print(f"[V3 WARN] YouTube HTML video {video_id}: {exc}")
+    print(f"[V3 FALLBACK] YouTube HTML query={query!r} candidates={len(items)}")
+    return items
+
+
 def discover_youtube_items():
     items = {}
     for query in s.YOUTUBE_QUERIES:
@@ -153,6 +205,16 @@ def discover_youtube_items():
                 items[key] = item
         except Exception as exc:
             print(f"[V3 WARN] YouTube discovery {query}: {exc}")
+
+    if not items:
+        for query in s.YOUTUBE_QUERIES:
+            try:
+                for item in discover_youtube_html(query):
+                    key = str(item.get("id") or item.get("webpage_url") or "")
+                    if key and is_nmt_related(relevant_youtube_text(item)):
+                        items[key] = item
+            except Exception as exc:
+                print(f"[V3 WARN] YouTube HTML discovery {query}: {exc}")
 
     def sort_key(item):
         dt = parse_iso(item_time(item))
@@ -254,32 +316,10 @@ def youtube_comment_events(items, max_videos=5):
 
 
 def scan_twstalker_official():
-    events = []
-    success = 0
-    for url in MIRROR_URLS:
-        try:
-            r = requests.get(url, headers=UA, timeout=18)
-            r.raise_for_status()
-            soup = BeautifulSoup(r.text, "html.parser")
-            text = soup.get_text(" ", strip=True)
-            if "nmt" not in text.lower():
-                continue
-            success += 1
-            for code, context in s.extract_codes(text).items():
-                events.append(
-                    s.event(
-                        code,
-                        f"X mirror (TwStalker): {url.split('/')[2]}",
-                        url,
-                        context,
-                        None,
-                        "x-mirror",
-                    )
-                )
-        except Exception as exc:
-            print(f"[V3 WARN] X mirror {url}: {exc}")
-    print(f"[V3] X mirrors ok={success}/{len(MIRROR_URLS)} events={len(events)}")
-    return events
+    # TwStalker currently blocks GitHub runners on every known hostname.
+    # Public X discovery continues through DDG plus the official-reader fallback.
+    print("[V3] X mirrors bypassed; indexed search + public reader active")
+    return []
 
 
 def load_state():
