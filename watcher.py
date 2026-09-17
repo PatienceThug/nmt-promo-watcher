@@ -107,7 +107,7 @@ def session():
         read=3,
         backoff_factor=0.8,
         status_forcelist=(429, 500, 502, 503, 504),
-        allowed_methods=("GET", "POST"),
+        allowed_methods=("GET",),
     )
     s.mount("https://", HTTPAdapter(max_retries=retry))
     s.headers.update(UA)
