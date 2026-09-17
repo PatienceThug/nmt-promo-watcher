@@ -104,7 +104,6 @@ def load_state():
 
 def save_state(state):
     state["updated_at"] = datetime.now(timezone.utc).isoformat()
-    state["sent_issue_numbers"] = state["sent_issue_numbers"][-1500:]
     STATE_PATH.write_text(json.dumps(state, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
