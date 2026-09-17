@@ -1,5 +1,9 @@
+import json
 import os
 import re
+import subprocess
+from datetime import datetime, timezone
+
 import requests
 import social_watcher as s
 
@@ -56,7 +60,7 @@ def x_api_search(query, label):
             },
             timeout=25,
         )
-        if r.status_code in (401, 403, 429):
+        if r.status_code in (401, 402, 403, 429):
             print(f"[SOCIAL WARN] X API {label}: HTTP {r.status_code}")
             return []
         r.raise_for_status()
@@ -114,8 +118,77 @@ def scan_search_with_api(deep=False):
     return events
 
 
+def scan_youtube_tags_fixed():
+    events = []
+    seen_video_ids = set()
+    for query in s.YOUTUBE_QUERIES:
+        try:
+            proc = subprocess.run(
+                [
+                    "yt-dlp", "--skip-download", "--dump-json",
+                    "--playlist-end", "8", f"ytsearch8:{query}",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=95,
+            )
+            for line in proc.stdout.splitlines():
+                try:
+                    item = json.loads(line)
+                except Exception:
+                    continue
+                video_id = str(item.get("id") or "")
+                if video_id and video_id in seen_video_ids:
+                    continue
+                if video_id:
+                    seen_video_ids.add(video_id)
+                title = item.get("title") or ""
+                desc = item.get("description") or ""
+                tags = item.get("tags") or []
+                if not isinstance(tags, list):
+                    tags = [str(tags)]
+                channel = item.get("channel") or item.get("uploader") or ""
+                url = item.get("webpage_url") or item.get("original_url") or ""
+                tag_text = " ".join(str(x) for x in tags)
+                haystack = "\n".join([title, desc, tag_text, channel])
+                low = haystack.lower()
+                if "nmt.gg" not in low and "nmtgg" not in low and "#nmtgg" not in low and " nmt " not in f" {low} ":
+                    continue
+                published = None
+                ts = item.get("timestamp")
+                if ts:
+                    try:
+                        published = datetime.fromtimestamp(float(ts), tz=timezone.utc).isoformat()
+                    except Exception:
+                        pass
+                if not published:
+                    upload_date = item.get("upload_date")
+                    if upload_date and len(upload_date) == 8:
+                        try:
+                            published = datetime.strptime(upload_date, "%Y%m%d").replace(tzinfo=timezone.utc).isoformat()
+                        except Exception:
+                            pass
+                for code, context in s.extract_codes(haystack).items():
+                    events.append(
+                        s.event(
+                            code,
+                            f"YouTube tags/metadata: {title[:85]}",
+                            url,
+                            context,
+                            published,
+                            "youtube-tags",
+                        )
+                    )
+            if proc.returncode not in (0, 1):
+                print(f"[SOCIAL WARN] YouTube {query}: return {proc.returncode}")
+        except Exception as exc:
+            print(f"[SOCIAL WARN] YouTube {query}: {exc}")
+    return events
+
+
 s.scan_official_x = scan_official_with_api
 s.scan_x_search = scan_search_with_api
+s.scan_youtube_tags = scan_youtube_tags_fixed
 
 if __name__ == "__main__":
     s.main()
