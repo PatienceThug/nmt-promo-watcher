@@ -22,8 +22,22 @@ def github_headers():
     }
 
 
+def get_bot_identity():
+    if not BOT_TOKEN:
+        return ""
+    r = requests.get(f"https://api.telegram.org/bot{BOT_TOKEN}/getMe", timeout=20)
+    r.raise_for_status()
+    data = r.json()
+    if not data.get("ok"):
+        return ""
+    result = data.get("result") or {}
+    username = result.get("username") or ""
+    if username:
+        print(f"[TG] Connected bot: @{username}")
+    return username
+
+
 def protect_chat_id(chat_id: str):
-    """Protect the numeric chat id before storing it in the public repo state file."""
     if not BOT_TOKEN or not chat_id:
         return ""
     key = hashlib.sha256((BOT_TOKEN + "::nmt-chat-id").encode()).digest()
@@ -57,7 +71,9 @@ def detect_chat_id_from_updates():
     if not data.get("ok"):
         return ""
 
-    for update in reversed(data.get("result", [])):
+    updates = data.get("result", [])
+    print(f"[TG] getUpdates returned {len(updates)} update(s)")
+    for update in reversed(updates):
         message = update.get("message") or update.get("edited_message") or {}
         chat = message.get("chat") or {}
         if chat.get("type") == "private" and chat.get("id") is not None:
@@ -174,6 +190,8 @@ def main():
         print("[TG] TELEGRAM_BOT_TOKEN not configured yet")
         return
 
+    get_bot_identity()
+
     state = load_state()
     chat_id = CHAT_ID or recover_chat_id(state.get("chat_id_enc", ""))
 
@@ -185,7 +203,7 @@ def main():
             print("[TG] Telegram private chat discovered and protected in state")
 
     if not chat_id:
-        print("[TG] No Telegram chat found. Send /start to the bot and wait for the next run.")
+        print("[TG] No Telegram chat found. Send /start to the connected bot and wait for the next run.")
         return
 
     issues = get_promo_issues()
