@@ -115,8 +115,8 @@ def load_state():
         data.setdefault("sent_issue_numbers", [])
         data.setdefault("chat_id_enc", "")
         return data
-    except Exception:
-        return {"initialized": False, "sent_issue_numbers": [], "chat_id_enc": ""}
+    except Exception as exc:
+        raise RuntimeError("Telegram state unreadable; refusing to replay alerts") from exc
 
 
 def save_state(state):
@@ -203,6 +203,51 @@ def alert_message(issue):
     )
 
 
+def promo_key(issue):
+    title = issue.get("title") or ""
+    if title.startswith("🚨 NMT PROMO:"):
+        return title.split(":", 1)[1].strip().strip("`\"'").upper()
+    return ""
+
+
+def notify_issues(state, issues, chat_id):
+    sent = set(int(x) for x in state.get("sent_issue_numbers", []))
+    codes = set(state.get("sent_codes", []))
+    # Migrate the existing delivery history before considering new issue IDs.
+    codes.update(promo_key(i) for i in issues if int(i["number"]) in sent and promo_key(i))
+    now = datetime.now(timezone.utc)
+    health_at = state.get("last_health_sent_at")
+    delivered = suppressed = 0
+    for issue in sorted(issues, key=lambda i: int(i["number"])):
+        number = int(issue["number"])
+        if number in sent:
+            continue
+        code = promo_key(issue)
+        duplicate = bool(code and code in codes)
+        if not code and health_at:
+            last = datetime.fromisoformat(health_at)
+            duplicate = (now - last).total_seconds() < 24 * 3600
+        if duplicate:
+            suppressed += 1
+        else:
+            raw_code = (issue.get("title") or "").split(":", 1)[1].strip() if code else ""
+            send_telegram(alert_message(issue), chat_id, copy_code=raw_code)
+            delivered += 1
+            if code:
+                codes.add(code)
+            else:
+                health_at = now.isoformat()
+        sent.add(number)
+        state["sent_issue_numbers"] = sorted(sent)
+        state["sent_codes"] = sorted(codes)
+        if health_at:
+            state["last_health_sent_at"] = health_at
+        save_state(state)
+    state["sent_codes"] = sorted(codes)
+    save_state(state)
+    print(f"[TG] delivered={delivered}, suppressed={suppressed}")
+
+
 def main():
     if not BOT_TOKEN:
         raise RuntimeError("TELEGRAM_BOT_TOKEN eksik; Telegram bildirimleri gönderilemiyor")
@@ -234,26 +279,12 @@ def main():
         )
         state["initialized"] = True
         state["sent_issue_numbers"] = sorted(sent)
+        state["sent_codes"] = sorted({promo_key(i) for i in issues if promo_key(i)})
         save_state(state)
         print("[TG] Telegram initialized and test message sent")
         return
 
-    unseen = [issue for issue in reversed(issues) if int(issue["number"]) not in sent]
-    delivered = 0
-    for issue in unseen:
-        title = issue.get("title") or ""
-        copy_code = title.split(":", 1)[1].strip() if title.startswith("🚨 NMT PROMO:") else ""
-        if send_telegram(alert_message(issue), chat_id, copy_code=copy_code):
-            sent.add(int(issue["number"]))
-            delivered += 1
-            state["sent_issue_numbers"] = sorted(sent)
-            save_state(state)
-
-    if unseen:
-        state["sent_issue_numbers"] = sorted(sent)
-        save_state(state)
-
-    print(f"[TG] delivered={delivered}, unseen={len(unseen)}")
+    notify_issues(state, issues, chat_id)
 
 
 if __name__ == "__main__":
