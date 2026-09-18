@@ -219,7 +219,9 @@
     "e9b3a735baa952e99b9e00a5",
     "a99a37ddbc018a58f50c8336",
     "94c70371bdec36de1235d692",
-    "f950bce88b9167fdbb8c9737"
+    "f950bce88b9167fdbb8c9737",
+    "d19faa5497635ce80cb689bd",
+    "ee3d21db32d97096dc84c7b8"
   ],
   "code_last_alert": {
     "ALINAN": "2026-09-17T15:24:23.807883+00:00",
@@ -257,7 +259,7 @@
     "YOKTUR": "2026-09-17T15:24:23.807883+00:00",
     "ASS22ZA234": "2026-09-18T02:34:11.186465+00:00"
   },
-  "updated_at": "2026-09-18T23:47:08.416926+00:00",
+  "updated_at": "2026-09-18T23:57:26.412224+00:00",
   "health": {
     "primary_failure_streak": 0,
     "last_health_alert": null
