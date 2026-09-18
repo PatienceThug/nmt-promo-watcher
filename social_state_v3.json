@@ -1,7 +1,11 @@
 {
   "version": 3,
-  "seen_event_ids": [],
-  "last_alert": {},
+  "seen_event_ids": [
+    "e0f211570fa0884a11a6d1af"
+  ],
+  "last_alert": {
+    "ASS22ZA234": "2026-09-18T17:29:32.873945+00:00"
+  },
   "initialized": true,
-  "updated_at": "2026-09-18T17:17:31.823627+00:00"
+  "updated_at": "2026-09-18T17:29:32.873945+00:00"
 }
