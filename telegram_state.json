@@ -36,10 +36,11 @@
     34,
     35,
     36,
-    37
+    37,
+    39
   ],
   "chat_id_enc": "gY51zPCo16cj0A==",
-  "updated_at": "2026-09-19T11:52:39.486538+00:00",
+  "updated_at": "2026-09-19T11:56:58.904105+00:00",
   "sent_codes": [
     "ALINAN",
     "ASS22ZA234",
@@ -75,5 +76,6 @@
     "YARARLANABILIRSINIZ",
     "YATIRIM",
     "YOKTUR"
-  ]
+  ],
+  "last_health_sent_at": "2026-09-19T11:56:58.283758+00:00"
 }
