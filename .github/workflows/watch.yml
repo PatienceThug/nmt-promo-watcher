@@ -12,6 +12,7 @@ on:
       - "social_watcher_v3.py"
       - "telegram_notify.py"
       - "test_telegram_notify.py"
+      - "test_social_watcher.py"
       - "merge_state.py"
       - "requirements.txt"
       - ".github/workflows/watch.yml"
@@ -58,6 +59,7 @@ jobs:
           python -m py_compile social_watcher_v3.py
           python -m py_compile telegram_notify.py
           python -m unittest -v test_telegram_notify.py
+          python -m unittest -v test_social_watcher.py
           python -m py_compile merge_state.py
           python -c "import watcher_v3 as w; assert 'TEST123' in w.extract_codes('promo code: TEST123')"
           python -c "import social_watcher_v3 as s; assert s.is_nmt_related('NMT.GG promo')"
