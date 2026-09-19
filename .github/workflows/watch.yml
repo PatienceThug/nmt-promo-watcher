@@ -2,6 +2,12 @@ name: NMT Promo Watcher
 # Free-only social monitoring mode
 
 on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "**.py"
+      - "requirements.txt"
+      - ".github/workflows/watch.yml"
   push:
     branches: [main]
     paths:
@@ -12,6 +18,7 @@ on:
       - "social_watcher_v3.py"
       - "telegram_notify.py"
       - "test_telegram_notify.py"
+      - "test_social_watcher.py"
       - "merge_state.py"
       - "requirements.txt"
       - ".github/workflows/watch.yml"
@@ -38,7 +45,7 @@ jobs:
         uses: actions/checkout@v5
         with:
           fetch-depth: 0
-          ref: main
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || 'main' }}
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -58,11 +65,13 @@ jobs:
           python -m py_compile social_watcher_v3.py
           python -m py_compile telegram_notify.py
           python -m unittest -v test_telegram_notify.py
+          python -m unittest -v test_social_watcher.py
           python -m py_compile merge_state.py
           python -c "import watcher_v3 as w; assert 'TEST123' in w.extract_codes('promo code: TEST123')"
           python -c "import social_watcher_v3 as s; assert s.is_nmt_related('NMT.GG promo')"
 
       - name: Choose fast or deep scan
+        if: ${{ github.event_name != 'pull_request' }}
         id: mode
         shell: bash
         run: |
@@ -81,6 +90,7 @@ jobs:
           fi
 
       - name: Scan Telegram and web sources
+        if: ${{ github.event_name != 'pull_request' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
@@ -89,6 +99,7 @@ jobs:
         run: python watcher_v4.py --mode "${{ steps.mode.outputs.mode }}"
 
       - name: Scan free X YouTube comments and Shorts
+        if: ${{ github.event_name != 'pull_request' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
@@ -96,7 +107,7 @@ jobs:
         run: python social_watcher_v3.py --mode "${{ steps.mode.outputs.mode }}"
 
       - name: Record scan failure in GitHub Issues
-        if: ${{ failure() }}
+        if: ${{ failure() && github.event_name != 'pull_request' }}
         uses: actions/github-script@v7
         with:
           script: |
@@ -113,7 +124,7 @@ jobs:
 
       - name: Send Telegram push notifications
         id: notify
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && github.event_name != 'pull_request' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
@@ -124,7 +135,7 @@ jobs:
 
       - name: Persist watcher state
         id: persist
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && github.event_name != 'pull_request' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -178,7 +189,7 @@ jobs:
           exit 1
 
       - name: Record notification or state failure
-        if: ${{ failure() && (steps.notify.outcome == 'failure' || steps.persist.outcome == 'failure') }}
+        if: ${{ failure() && github.event_name != 'pull_request' && (steps.notify.outcome == 'failure' || steps.persist.outcome == 'failure') }}
         uses: actions/github-script@v7
         with:
           script: |

@@ -1,3 +1,4 @@
+import email.utils
 import json
 import re
 import subprocess
@@ -47,6 +48,23 @@ s.DIRECT_PATTERNS = [
 ]
 
 SYNDICATION_URL = "https://syndication.twitter.com/srv/timeline-profile/screen-name/nmt_off"
+LAST_X_HEALTH = {}
+
+
+def _retry_after_seconds(response, default=1800):
+    """Return a bounded Retry-After delay without trying to evade X limits."""
+    value = (response.headers.get("Retry-After") or "").strip()
+    try:
+        seconds = int(value)
+    except ValueError:
+        try:
+            retry_at = email.utils.parsedate_to_datetime(value)
+            if retry_at.tzinfo is None:
+                retry_at = retry_at.replace(tzinfo=timezone.utc)
+            seconds = int((retry_at - datetime.now(timezone.utc)).total_seconds())
+        except Exception:
+            seconds = default
+    return max(300, min(seconds, 6 * 3600))
 
 
 def _twitter_time(value):
@@ -77,7 +95,42 @@ def _tweet_objects(obj):
             yield from _tweet_objects(value)
 
 
-def scan_official_x_free():
+def _scan_public_reader():
+    text = s.fetch_text(
+        s.JINA_X_URL,
+        headers={"X-Cache-Tolerance": "0", "X-Retain-Images": "none"},
+        timeout=35,
+    )
+    if "nmt" not in text.lower():
+        raise RuntimeError("official X reader returned unexpected content")
+    events = []
+    for code, context in s.extract_codes(text).items():
+        events.append(
+            s.event(
+                code,
+                "X official @nmt_off (public reader)",
+                s.OFFICIAL_X_URL,
+                context,
+                None,
+                "x-reader",
+            )
+        )
+    print(f"[SOCIAL] public X reader: {len(events)} promo event(s)")
+    return events
+
+
+def scan_official_x_free(skip_syndication=False):
+    LAST_X_HEALTH.clear()
+    LAST_X_HEALTH["checked_at"] = datetime.now(timezone.utc).isoformat()
+    if skip_syndication:
+        LAST_X_HEALTH.update(primary="cooldown", fallback="pending")
+        try:
+            events = _scan_public_reader()
+            LAST_X_HEALTH["fallback"] = "ok"
+            return events
+        except Exception as exc:
+            LAST_X_HEALTH.update(fallback="error", error=str(exc)[:240])
+            raise
     try:
         r = requests.get(
             SYNDICATION_URL,
@@ -86,6 +139,8 @@ def scan_official_x_free():
             },
             timeout=25,
         )
+        if r.status_code == 429:
+            LAST_X_HEALTH["retry_after_seconds"] = _retry_after_seconds(r)
         r.raise_for_status()
         soup = BeautifulSoup(r.text, "html.parser")
         script = soup.find("script", id="__NEXT_DATA__")
@@ -118,33 +173,22 @@ def scan_official_x_free():
                     )
                 )
         print(f"[SOCIAL] free X syndication: {len(events)} promo event(s)")
+        LAST_X_HEALTH.update(primary="ok", fallback="not_needed")
         return events
     except Exception as exc:
         # X syndication is frequently rate-limited. The public Jina reader keeps
         # discovery alive without a paid X API. Its untimestamped evidence is
         # intentionally not considered fresh unless another source confirms it.
         print(f"[SOCIAL FALLBACK] X syndication unavailable: {exc}")
-        text = s.fetch_text(
-            s.JINA_X_URL,
-            headers={"X-Cache-Tolerance": "0", "X-Retain-Images": "none"},
-            timeout=35,
-        )
-        if "nmt" not in text.lower():
-            raise RuntimeError("official X reader returned unexpected content")
-        events = []
-        for code, context in s.extract_codes(text).items():
-            events.append(
-                s.event(
-                    code,
-                    "X official @nmt_off (public reader)",
-                    s.OFFICIAL_X_URL,
-                    context,
-                    None,
-                    "x-reader",
-                )
-            )
-        print(f"[SOCIAL] public X reader: {len(events)} promo event(s)")
-        return events
+        LAST_X_HEALTH.setdefault("primary", "rate_limited" if "429" in str(exc) else "error")
+        LAST_X_HEALTH["error"] = str(exc)[:240]
+        try:
+            events = _scan_public_reader()
+            LAST_X_HEALTH["fallback"] = "ok"
+            return events
+        except Exception as fallback_exc:
+            LAST_X_HEALTH.update(fallback="error", fallback_error=str(fallback_exc)[:240])
+            raise
 
 
 _original_search = s.scan_x_search
