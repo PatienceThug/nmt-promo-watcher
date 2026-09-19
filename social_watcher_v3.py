@@ -3,7 +3,7 @@ import json
 import re
 import subprocess
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import requests
@@ -323,7 +323,8 @@ def scan_twstalker_official():
 
 
 def load_state():
-    default = {"version": 3, "seen_event_ids": [], "last_alert": {}, "initialized": False}
+    default = {"version": 3, "seen_event_ids": [], "last_alert": {}, "initialized": False,
+               "source_health": {}}
     if not STATE_PATH.exists():
         return default
     try:
@@ -334,6 +335,7 @@ def load_state():
         data.setdefault("seen_event_ids", [])
         data.setdefault("last_alert", {})
         data.setdefault("initialized", False)
+        data.setdefault("source_health", {})
         return data
     except Exception:
         return default
@@ -369,12 +371,39 @@ def eligible(group):
     return False
 
 
-def scan(mode):
+def _x_cooldown_active(state):
+    value = state.get("source_health", {}).get("x_official", {}).get("cooldown_until")
+    until = parse_iso(value)
+    return bool(until and until > NOW)
+
+
+def _record_x_health(state):
+    health = dict(v2.LAST_X_HEALTH)
+    old = state.setdefault("source_health", {}).get("x_official", {})
+    primary = health.get("primary")
+    if primary == "ok":
+        health["consecutive_primary_failures"] = 0
+        health.pop("cooldown_until", None)
+    elif primary in ("rate_limited", "error"):
+        failures = int(old.get("consecutive_primary_failures", 0)) + 1
+        health["consecutive_primary_failures"] = failures
+        delay = int(health.get("retry_after_seconds") or min(1800 * (2 ** (failures - 1)), 6 * 3600))
+        health["cooldown_until"] = (NOW + timedelta(seconds=delay)).isoformat()
+    elif primary == "cooldown":
+        health["consecutive_primary_failures"] = int(old.get("consecutive_primary_failures", 0))
+        health["cooldown_until"] = old.get("cooldown_until")
+    state["source_health"]["x_official"] = health
+    print("[V3 HEALTH] x_official=" + json.dumps(health, ensure_ascii=False, sort_keys=True))
+
+
+def scan(mode, state):
     events = []
     try:
-        events.extend(s.scan_official_x())
+        events.extend(v2.scan_official_x_free(skip_syndication=_x_cooldown_active(state)))
     except Exception as exc:
         print(f"[V3 WARN] official X: {exc}")
+    finally:
+        _record_x_health(state)
     try:
         events.extend(s.scan_x_search(deep=mode == "deep"))
     except Exception as exc:
@@ -395,8 +424,8 @@ def main():
     parser.add_argument("--mode", choices=("fast", "deep"), default="fast")
     args = parser.parse_args()
 
-    events = scan(args.mode)
     state = load_state()
+    events = scan(args.mode, state)
     seen = set(state.get("seen_event_ids", []))
     last_alert = state.get("last_alert", {})
 
