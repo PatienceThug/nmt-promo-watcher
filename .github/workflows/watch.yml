@@ -2,6 +2,12 @@ name: NMT Promo Watcher
 # Free-only social monitoring mode
 
 on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "**.py"
+      - "requirements.txt"
+      - ".github/workflows/watch.yml"
   push:
     branches: [main]
     paths:
