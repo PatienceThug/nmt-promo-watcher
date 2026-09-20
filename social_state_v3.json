@@ -7,17 +7,17 @@
     "ASS22ZA234": "2026-09-18T17:29:32.873945+00:00"
   },
   "initialized": true,
-  "updated_at": "2026-09-20T18:50:52.454319+00:00",
+  "updated_at": "2026-09-20T18:59:15.403536+00:00",
   "source_health": {
     "x_official": {
-      "checked_at": "2026-09-20T18:50:52.456606+00:00",
+      "checked_at": "2026-09-20T18:59:15.406273+00:00",
       "retry_after_seconds": 1800,
-      "primary": "cooldown",
-      "error": "403 Client Error: Forbidden for url: https://r.jina.ai/http://twitter.com/nmt_off",
+      "primary": "rate_limited",
+      "error": "429 Client Error: Too Many Requests for url: https://syndication.twitter.com/srv/timeline-profile/screen-name/nmt_off",
       "fallback": "error",
       "fallback_error": "403 Client Error: Forbidden for url: https://r.jina.ai/http://twitter.com/nmt_off",
-      "consecutive_primary_failures": 14,
-      "cooldown_until": "2026-09-20T18:57:22.526130+00:00"
+      "consecutive_primary_failures": 15,
+      "cooldown_until": "2026-09-20T19:29:15.403536+00:00"
     }
   }
 }
