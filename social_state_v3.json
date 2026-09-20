@@ -7,10 +7,10 @@
     "ASS22ZA234": "2026-09-18T17:29:32.873945+00:00"
   },
   "initialized": true,
-  "updated_at": "2026-09-20T19:13:23.900018+00:00",
+  "updated_at": "2026-09-20T19:23:46.531206+00:00",
   "source_health": {
     "x_official": {
-      "checked_at": "2026-09-20T19:13:23.901553+00:00",
+      "checked_at": "2026-09-20T19:23:46.534141+00:00",
       "retry_after_seconds": 1800,
       "primary": "cooldown",
       "error": "403 Client Error: Forbidden for url: https://r.jina.ai/http://twitter.com/nmt_off",
