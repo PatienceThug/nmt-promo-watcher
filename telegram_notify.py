@@ -124,6 +124,23 @@ def save_state(state):
     STATE_PATH.write_text(json.dumps(state, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
+def _health_issue_is_current(item):
+    """Only deliver live health incidents, never replay old/closed failures."""
+    if (item.get("state") or "").lower() != "open":
+        return False
+
+    created_at = item.get("created_at") or ""
+    if not created_at:
+        return True
+
+    try:
+        created = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+    except ValueError:
+        return True
+
+    return (datetime.now(timezone.utc) - created).total_seconds() <= 6 * 3600
+
+
 def get_alert_issues():
     if not REPO or not GITHUB_TOKEN:
         raise RuntimeError("GitHub repository/token missing")
@@ -143,7 +160,9 @@ def get_alert_issues():
             if "pull_request" in item:
                 continue
             title = item.get("title") or ""
-            if title.startswith(("🚨 NMT PROMO:", "⚠️ NMT WATCHER HEALTH:")):
+            if title.startswith("🚨 NMT PROMO:"):
+                alerts.append(item)
+            elif title.startswith("⚠️ NMT WATCHER HEALTH:") and _health_issue_is_current(item):
                 alerts.append(item)
         if len(items) < 100:
             return alerts
