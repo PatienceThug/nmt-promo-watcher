@@ -1,6 +1,7 @@
 import json
 import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
 
@@ -50,6 +51,30 @@ class NotificationTests(unittest.TestCase):
         self.path.write_text("broken", encoding="utf-8")
         with self.assertRaises(RuntimeError):
             n.load_state()
+
+    def test_closed_health_issue_is_never_replayed(self):
+        alert = {
+            "state": "closed",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "title": "⚠️ NMT WATCHER HEALTH: Workflow 123",
+        }
+        self.assertFalse(n._health_issue_is_current(alert))
+
+    def test_old_open_health_issue_is_not_replayed(self):
+        alert = {
+            "state": "open",
+            "created_at": (datetime.now(timezone.utc) - timedelta(hours=7)).isoformat(),
+            "title": "⚠️ NMT WATCHER HEALTH: Workflow 123",
+        }
+        self.assertFalse(n._health_issue_is_current(alert))
+
+    def test_recent_open_health_issue_is_deliverable(self):
+        alert = {
+            "state": "open",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "title": "⚠️ NMT WATCHER HEALTH: Workflow 123",
+        }
+        self.assertTrue(n._health_issue_is_current(alert))
 
 
 if __name__ == "__main__":
