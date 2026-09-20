@@ -7,17 +7,17 @@
     "ASS22ZA234": "2026-09-18T17:29:32.873945+00:00"
   },
   "initialized": true,
-  "updated_at": "2026-09-20T14:05:46.059309+00:00",
+  "updated_at": "2026-09-20T14:20:55.214169+00:00",
   "source_health": {
     "x_official": {
-      "checked_at": "2026-09-20T14:05:46.062196+00:00",
+      "checked_at": "2026-09-20T14:20:55.216899+00:00",
       "retry_after_seconds": 1800,
-      "primary": "cooldown",
-      "error": "422 Client Error: Unprocessable Entity for url: https://r.jina.ai/http://twitter.com/nmt_off",
-      "fallback": "error",
+      "primary": "rate_limited",
+      "error": "429 Client Error: Too Many Requests for url: https://syndication.twitter.com/srv/timeline-profile/screen-name/nmt_off",
+      "fallback": "ok",
       "fallback_error": "403 Client Error: Forbidden for url: https://r.jina.ai/http://twitter.com/nmt_off",
-      "consecutive_primary_failures": 6,
-      "cooldown_until": "2026-09-20T14:14:53.597684+00:00"
+      "consecutive_primary_failures": 7,
+      "cooldown_until": "2026-09-20T14:50:55.214169+00:00"
     }
   }
 }
