@@ -8,10 +8,10 @@
     "ASS22ZA234": "2026-09-18T17:29:32.873945+00:00"
   },
   "initialized": true,
-  "updated_at": "2026-09-21T11:44:08.117973+00:00",
+  "updated_at": "2026-09-21T11:54:34.566992+00:00",
   "source_health": {
     "x_official": {
-      "checked_at": "2026-09-21T11:44:08.120983+00:00",
+      "checked_at": "2026-09-21T11:54:34.569822+00:00",
       "retry_after_seconds": 1800,
       "primary": "cooldown",
       "error": "429 Client Error: Too Many Requests for url: https://syndication.twitter.com/srv/timeline-profile/screen-name/nmt_off",
