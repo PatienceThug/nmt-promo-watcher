@@ -3,7 +3,7 @@
 NMT.GG promo kodlarını takip eden otomatik tarayıcı.
 
 - GitHub Actions zamanlaması `*/5 * * * *`: hedef her 5 dakikada bir taramadır. GitHub gecikmeleri nedeniyle kesin 5 dakika garantisi yoktur.
-- Hızlı tarama Telegram, NMT sayfaları ve ücretsiz resmi X kaynağını kontrol eder. Her beşinci çalıştırma ve elle/kod değişikliğiyle başlatılan çalıştırmalar kapsamlı tarama yapar.
+- Hızlı tarama Telegram ve NMT sayfalarını kontrol eder. Her beşinci çalıştırma ve elle/kod değişikliğiyle başlatılan çalıştırmalar kapsamlı tarama yapar.
 - Yeni kod için önce `🚨 NMT PROMO:` başlıklı GitHub Issue açılır. Telegram bildirimi bu kayıttan üretilir.
 - Telegram ana bildirim kanalıdır; GitHub Issues yedek kayıttır. Yeni kod bulunmazsa rutin mesaj gönderilmez.
 - İlk Telegram kurulumunda eski issue'lar baz alınır; geçmiş uyarılar topluca gönderilmez.
@@ -35,8 +35,15 @@ Workflow yalnızca gereken `contents: write` (durum kaydı) ve `issues: write` (
 - Delivery receipts are persisted after each notification. Telegram delivery and GitHub commits cannot form a single transaction: a crash between them can still replay one message.
 - Primary scans deliver before slow social discovery. Social discovery has a 180-second budget; incomplete coverage is recorded in the Actions summary.
 - Telegram promo posts also support isolated `<code>`/`<pre>` tokens after emoji or explanatory text. Community channels must identify NMT in the post text or links. Existing freshness and duplicate filters remain active.
-- The Actions summary and `scan-evidence` artifact show readable channels, post counts, candidate counts and latest post dates. A candidate is not a confirmed redeemable code. X 403/429 means incomplete X coverage; no personal X credentials or paid API are used.
+- The Actions summary and `scan-evidence` artifact show readable channels, post counts, candidate counts and latest post dates. A candidate is not a confirmed redeemable code. No personal social-account credentials or paid API are used.
 - Repeated workflow failures share an open health issue instead of opening a new issue every run. Delivery failures have a distinct Telegram message.
-- The fast core retains Telegram and official web pages. Deep X/YouTube discovery remains in the social scanner; duplicate core YouTube/mirror searches no longer delay primary notifications. Image/video-only codes are not read.
+- The fast core retains Telegram and official web pages. Deep YouTube discovery remains in the YouTube scanner; duplicate core YouTube/mirror searches no longer delay primary notifications. Image/video-only codes are not read.
 
-Run regression checks: `python -m unittest -v test_radar.py test_telegram_notify.py test_social_watcher.py`.
+Run regression checks: `python -m unittest -v test_radar.py test_telegram_notify.py test_telegram_paging.py`.
+
+
+## Telegram backfill replaces X monitoring
+
+X/Twitter syndication, reader fallback, indexed searches, mirrors and their old scanner modules have been removed. YouTube descriptions, tags and recent comments remain in `youtube_watcher.py`; historical delivery state is migrated without carrying retired source health forward.
+
+Deep runs read up to three public message pages per configured Telegram channel (fast runs read one), stopping once the page contains no posts within 48 hours. Page cursors come from Telegram post IDs, and repeated posts are deduplicated. A failed older page preserves the readable recent page and is reported as partial coverage. This recovers recent promo posts pushed off the channel's first page by heavy activity; it does not add unverified channels or promise exhaustive history.

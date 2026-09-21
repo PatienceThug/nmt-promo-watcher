@@ -1,93 +1,91 @@
+"""YouTube-only discovery. No social account or login is used."""
 import argparse
-import os
 import json
+import os
 import re
 import subprocess
 from collections import defaultdict
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
-
 import requests
-from bs4 import BeautifulSoup
-
-# Importing v2 applies the stable free-only X + fixed YouTube monkey patches.
-import social_watcher_v2 as v2  # noqa: F401
-import social_watcher as s
-
+import watcher_v4
+w = watcher_v4.w
 NOW = datetime.now(timezone.utc)
-STATE_PATH = Path("social_state_v3.json")
+STATE_PATH = Path("youtube_state.json")
+REPO = w.REPO
+GITHUB_TOKEN = w.GITHUB_TOKEN
+HTTP = w.HTTP
+UA = w.UA
+YOUTUBE_QUERIES = ["NMT.GG promo code", "NMT.GG promosyon kodu", "NMT GG промокод", "NMT.GG shorts"]
+parse_iso = w.parse_iso
+extract_codes = w.extract_codes
+event = w.make_event
 
-# Broader FREE discovery. These are search-engine indexed mirrors/results; no paid API.
-EXTRA_X_QUERIES = [
-    'site:x.com/nmt_off/status "nmt.gg"',
-    'site:x.com/nmt_off/status (promo OR promocode OR promokod OR "promo kod" OR "promosyon kodu")',
-    'site:twstalker.com "nmt.gg" (promo OR promocode OR promokod OR "promo kod" OR "promosyon kodu")',
-    'site:ww.twstalker.com "nmt.gg" (promo OR promocode OR promokod OR "promo kod" OR "promosyon kodu")',
-    'site:mobile.twstalker.com "nmt.gg" (promo OR promocode OR promokod OR "promo kod" OR "promosyon kodu")',
-    'site:twstalker.com "@nmt_off" (promo OR code OR kod OR промокод)',
-]
-s.X_QUERIES_DEEP = list(dict.fromkeys(s.X_QUERIES_DEEP + EXTRA_X_QUERIES))
+def github_headers():
+    return {
+        "Authorization": f"Bearer {GITHUB_TOKEN}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
 
-# Shorts-focused searches plus the existing metadata searches.
-SHORTS_QUERIES = [
-    "NMT.GG shorts",
-    "#NMTGG shorts",
-    "NMT GG promo shorts",
-    "NMT.GG promosyon kodu shorts",
-    "NMT GG промокод shorts",
-]
-s.YOUTUBE_QUERIES = list(dict.fromkeys(s.YOUTUBE_QUERIES + SHORTS_QUERIES))
-
-# Extra wording frequently used instead of “promo code”.
-s.PROMO_WORDS = re.compile(
-    r"(promo\s*code|promocode|promo\s*kod\w*|promokod\w*|promosyon\s*kod\w*|"
-    r"kupon\s*kod\w*|bonus\s*kod\w*|redeem\s*code|redemption\s*code|"
-    r"промокод\w*|промо\s*код\w*|промо-код\w*|"
-    r"bonus\s*code|gift\s*code|hediye\s*kod\w*|voucher\s*code|coupon\s*code)",
-    re.I,
-)
-
-s.DIRECT_PATTERNS = [
-    re.compile(
-        r"(?:promo\s*code|promocode|promo\s*kod\w*|promokod\w*|promosyon\s*kod\w*|"
-        r"kupon\s*kod\w*|bonus\s*kod\w*|redeem\s*code|redemption\s*code|"
-        r"промокод\w*|промо\s*код\w*|промо-код\w*|"
-        r"bonus\s*code|gift\s*code|hediye\s*kod\w*|voucher\s*code|coupon\s*code)"
-        r"\s*[:=/#\-–—]*\s*[`\"'“”‘’]*([A-Z0-9][A-Z0-9_\-]{4,31})",
-        re.I,
-    ),
-    re.compile(
-        r"([A-Z0-9][A-Z0-9_\-]{4,31})[`\"'“”‘’]*\s*"
-        r"(?:promo\s*code|promocode|promokod|промокод|promo\s*kod\w*|promosyon\s*kod\w*|"
-        r"kupon\s*kod\w*|bonus\s*kod\w*|redeem\s*code|hediye\s*kod\w*)",
-        re.I,
-    ),
-]
-
-MIRROR_URLS = [
-    "https://twstalker.com/nmt_off",
-    "https://ww.twstalker.com/nmt_off",
-    "https://mobile.twstalker.com/nmt_off",
-]
-UA = {
-    "User-Agent": (
-        "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 "
-        "Chrome/124.0 Mobile Safari/537.36"
+def existing_recent_codes(hours=12):
+    if not REPO or not GITHUB_TOKEN:
+        return set()
+    r = HTTP.get(
+        f"https://api.github.com/repos/{REPO}/issues",
+        headers=github_headers(),
+        params={"state": "all", "per_page": 100, "sort": "created", "direction": "desc"},
+        timeout=20,
     )
-}
+    r.raise_for_status()
+    cutoff = NOW.timestamp() - hours * 3600
+    codes = set()
+    for issue in r.json():
+        title = issue.get("title") or ""
+        if not title.startswith("🚨 NMT PROMO:"):
+            continue
+        created = parse_iso(issue.get("created_at"))
+        if created and created.timestamp() >= cutoff:
+            codes.add(title.split(":", 1)[1].strip().upper())
+    return codes
 
+def create_issue(code, grouped):
+    if not REPO or not GITHUB_TOKEN:
+        print(f"[SOCIAL ALERT NO-GITHUB] {code}")
+        return
 
-def parse_iso(value):
-    return s.parse_iso(value)
+    lines = []
+    for e in grouped[:5]:
+        when = e.get("published_at") or "timestamp unavailable"
+        lines.append(f"- **{e['source']}** — {when}\n  {e['url']}")
 
+    body = (
+        "## 🚨 NMT promo kodu — YouTube watcher\n\n"
+        f"# `{code}`\n\n"
+        + "\n".join(lines)
+        + "\n\n"
+        f"**Yakalanma zamanı (UTC):** {NOW.strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+        "YouTube taramasında bulundu. Kod limitli olabilir; NMT.GG üzerinde hızlı dene."
+    )
+    payload = {"title": f"🚨 NMT PROMO: {code}", "body": body}
+    owner = REPO.split("/", 1)[0] if "/" in REPO else ""
+    if owner:
+        payload["assignees"] = [owner]
 
+    r = HTTP.post(
+        f"https://api.github.com/repos/{REPO}/issues",
+        headers=github_headers(),
+        json=payload,
+        timeout=20,
+    )
+    r.raise_for_status()
+    print(f"[SOCIAL ALERT] {code} {r.json().get('html_url', '')}")
 def is_recent(value, hours):
     dt = parse_iso(value)
     if not dt:
         return False
     age = (NOW - dt).total_seconds()
     return -3600 <= age <= hours * 3600
-
 
 def item_time(item):
     ts = item.get("timestamp")
@@ -104,7 +102,6 @@ def item_time(item):
             pass
     return None
 
-
 def relevant_youtube_text(item):
     title = item.get("title") or ""
     desc = item.get("description") or ""
@@ -113,7 +110,6 @@ def relevant_youtube_text(item):
         tags = [str(tags)]
     channel = item.get("channel") or item.get("uploader") or ""
     return "\n".join([title, desc, " ".join(str(x) for x in tags), channel])
-
 
 def is_nmt_related(text):
     low = (text or "").lower()
@@ -125,13 +121,11 @@ def is_nmt_related(text):
         or " nmt " in f" {low} "
     )
 
-
 def _decode_json_string(value):
     try:
         return json.loads('"' + value + '"')
     except Exception:
         return value.replace("\\n", " ").replace("\\u0026", "&")
-
 
 def discover_youtube_html(query, limit=8):
     """Free fallback when yt-dlp/YouTube search yields no rows on cloud IPs."""
@@ -177,10 +171,9 @@ def discover_youtube_html(query, limit=8):
     print(f"[V3 FALLBACK] YouTube HTML query={query!r} candidates={len(items)}")
     return items
 
-
 def discover_youtube_items():
     items = {}
-    for query in s.YOUTUBE_QUERIES:
+    for query in YOUTUBE_QUERIES:
         try:
             proc = subprocess.run(
                 [
@@ -208,7 +201,7 @@ def discover_youtube_items():
             print(f"[V3 WARN] YouTube discovery {query}: {exc}")
 
     if not items:
-        for query in s.YOUTUBE_QUERIES:
+        for query in YOUTUBE_QUERIES:
             try:
                 for item in discover_youtube_html(query):
                     key = str(item.get("id") or item.get("webpage_url") or "")
@@ -222,7 +215,6 @@ def discover_youtube_items():
         return dt.timestamp() if dt else 0
 
     return sorted(items.values(), key=sort_key, reverse=True)
-
 
 def youtube_metadata_events(items):
     events = []
@@ -239,10 +231,9 @@ def youtube_metadata_events(items):
             pass
         kind = "youtube-shorts" if is_short else "youtube-tags"
         label = "YouTube Shorts metadata" if is_short else "YouTube tags/metadata"
-        for code, context in s.extract_codes(text).items():
-            events.append(s.event(code, f"{label}: {title[:85]}", url, context, published, kind))
+        for code, context in extract_codes(text).items():
+            events.append(event(code, f"{label}: {title[:85]}", url, context, published, kind))
     return events
-
 
 def youtube_comment_events(items, max_videos=5):
     events = []
@@ -297,9 +288,9 @@ def youtube_comment_events(items, max_videos=5):
                 if comment_id:
                     sep = "&" if "?" in url else "?"
                     comment_url = f"{url}{sep}lc={comment_id}"
-                for code, context in s.extract_codes(text).items():
+                for code, context in extract_codes(text).items():
                     events.append(
-                        s.event(
+                        event(
                             code,
                             f"YouTube yeni yorum: {title[:80]}",
                             comment_url,
@@ -315,114 +306,10 @@ def youtube_comment_events(items, max_videos=5):
             print(f"[V3 WARN] comments {title[:45]}: {exc}")
     return events
 
-
-def scan_twstalker_official():
-    # TwStalker currently blocks GitHub runners on every known hostname.
-    # Public X discovery continues through DDG plus the official-reader fallback.
-    print("[V3] X mirrors bypassed; indexed search + public reader active")
-    return []
-
-
-def load_state():
-    default = {"version": 3, "seen_event_ids": [], "last_alert": {}, "initialized": False,
-               "source_health": {}}
-    if not STATE_PATH.exists():
-        return default
-    try:
-        data = json.loads(STATE_PATH.read_text(encoding="utf-8"))
-        if not isinstance(data, dict):
-            return default
-        data.setdefault("version", 3)
-        data.setdefault("seen_event_ids", [])
-        data.setdefault("last_alert", {})
-        data.setdefault("initialized", False)
-        data.setdefault("source_health", {})
-        return data
-    except Exception:
-        return default
-
-
 def save_state(state):
     state["updated_at"] = NOW.isoformat()
     state["seen_event_ids"] = state.get("seen_event_ids", [])[-10000:]
     STATE_PATH.write_text(json.dumps(state, indent=2, ensure_ascii=False), encoding="utf-8")
-
-
-def strong_fresh(group):
-    for e in group:
-        kind = e.get("kind")
-        published = e.get("published_at")
-        if kind == "x-syndication" and is_recent(published, 24):
-            return True
-        if kind in ("youtube-comment", "youtube-tags", "youtube-shorts") and is_recent(published, 72):
-            return True
-    return False
-
-
-def eligible(group):
-    if strong_fresh(group):
-        return True
-    sources = {e.get("source") for e in group}
-    # Untimestamped free indexes/mirrors are accepted if independently corroborated.
-    if len(sources) >= 2:
-        return True
-    # A newly indexed x.com result after the initial baseline is useful enough to alert once.
-    if any(e.get("kind") == "x-search" and "x.com" in (e.get("url") or "") for e in group):
-        return True
-    return False
-
-
-def _x_cooldown_active(state):
-    value = state.get("source_health", {}).get("x_official", {}).get("cooldown_until")
-    until = parse_iso(value)
-    return bool(until and until > NOW)
-
-
-def _record_x_health(state):
-    health = dict(v2.LAST_X_HEALTH)
-    old = state.setdefault("source_health", {}).get("x_official", {})
-    primary = health.get("primary")
-    if primary == "ok":
-        health["consecutive_primary_failures"] = 0
-        health.pop("cooldown_until", None)
-    elif primary in ("rate_limited", "error"):
-        failures = int(old.get("consecutive_primary_failures", 0)) + 1
-        health["consecutive_primary_failures"] = failures
-        delay = int(health.get("retry_after_seconds") or min(1800 * (2 ** (failures - 1)), 6 * 3600))
-        health["cooldown_until"] = (NOW + timedelta(seconds=delay)).isoformat()
-    elif primary == "cooldown":
-        health["consecutive_primary_failures"] = int(old.get("consecutive_primary_failures", 0))
-        health["cooldown_until"] = old.get("cooldown_until")
-    state["source_health"]["x_official"] = health
-    print("[V3 HEALTH] x_official=" + json.dumps(health, ensure_ascii=False, sort_keys=True))
-    if os.environ.get("GITHUB_STEP_SUMMARY"):
-        with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as out:
-            out.write("\n## X coverage\n\nPrimary: " + str(health.get("primary", "unknown")) +
-                      "; fallback: " + str(health.get("fallback", "not used")) + "\n")
-
-
-def scan(mode, state):
-    events = []
-    try:
-        events.extend(v2.scan_official_x_free(skip_syndication=_x_cooldown_active(state)))
-    except Exception as exc:
-        print(f"[V3 WARN] official X: {exc}")
-    finally:
-        _record_x_health(state)
-    try:
-        events.extend(s.scan_x_search(deep=mode == "deep"))
-    except Exception as exc:
-        print(f"[V3 WARN] X search: {exc}")
-
-    if mode == "deep":
-        events.extend(scan_twstalker_official())
-        yt_items = discover_youtube_items()
-        print(f"[V3] YouTube candidates={len(yt_items)}")
-        events.extend(youtube_metadata_events(yt_items))
-        events.extend(youtube_comment_events(yt_items, max_videos=5))
-
-    return list({e["id"]: e for e in events}.values())
-
 
 def main():
     parser = argparse.ArgumentParser()
@@ -441,12 +328,12 @@ def main():
         for e in events:
             if strong_fresh([e]):
                 grouped[e["code"]].append(e)
-        recent_issues = s.existing_recent_codes(12)
+        recent_issues = existing_recent_codes(12)
         alerts = 0
         for code, group in grouped.items():
             if code in recent_issues:
                 continue
-            s.create_issue(code, group)
+            create_issue(code, group)
             last_alert[code] = NOW.isoformat()
             alerts += 1
         seen.update(e["id"] for e in events)
@@ -462,7 +349,7 @@ def main():
     for e in new_events:
         grouped[e["code"]].append(e)
 
-    recent_issues = s.existing_recent_codes(12)
+    recent_issues = existing_recent_codes(12)
     alerted = 0
     for code, group in sorted(grouped.items()):
         if code in recent_issues:
@@ -475,7 +362,7 @@ def main():
         if not eligible(group):
             print(f"[V3 HOLD] {code} weak single-source evidence")
             continue
-        s.create_issue(code, group)
+        create_issue(code, group)
         last_alert[code] = NOW.isoformat()
         recent_issues.add(code)
         alerted += 1
@@ -486,6 +373,34 @@ def main():
     save_state(state)
     print(f"[V3 DONE] mode={args.mode} events={len(events)} new={len(new_events)} alerts={alerted}")
 
+def load_state():
+    # Migrate delivery history once, without carrying retired source health forward.
+    source = STATE_PATH if STATE_PATH.exists() else Path("social_state_v3.json")
+    if not source.exists():
+        return {"initialized": False, "seen_event_ids": [], "last_alert": {}}
+    data = json.loads(source.read_text())
+    return {k: data[k] for k in ("initialized", "seen_event_ids", "last_alert") if k in data}
+
+
+def strong_fresh(group):
+    return any(e.get("kind") in ("youtube-comment", "youtube-tags", "youtube-shorts")
+               and is_recent(e.get("published_at"), 72) for e in group)
+
+eligible = strong_fresh
+
+
+def scan(mode, state):
+    if mode != "deep":
+        print("[YouTube] Deep discovery scheduled for a later run")
+        return []
+    items = discover_youtube_items()
+    events = youtube_metadata_events(items) + youtube_comment_events(items, max_videos=3)
+    print(f"[YouTube] relevant_videos={len(items)} candidates={len(events)}")
+    summary = os.environ.get("GITHUB_STEP_SUMMARY")
+    if summary:
+        with open(summary, "a") as out:
+            out.write(f"\n## YouTube\n\nRelevant videos: {len(items)}; candidates: {len(events)}. Zero results do not prove complete coverage.\n")
+    return list({e["id"]: e for e in events}.values())
 
 if __name__ == "__main__":
     main()

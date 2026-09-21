@@ -13,12 +13,10 @@ on:
     paths:
       - "watcher_v3.py"
       - "watcher_v4.py"
-      - "social_watcher.py"
-      - "social_watcher_v2.py"
-      - "social_watcher_v3.py"
+      - "youtube_watcher.py"
+      - "test_telegram_paging.py"
       - "telegram_notify.py"
       - "test_telegram_notify.py"
-      - "test_social_watcher.py"
       - "merge_state.py"
       - "persist_state.py"
       - "telegram_radar.py"
@@ -63,16 +61,13 @@ jobs:
         run: |
           python -m py_compile watcher_v3.py
           python -m py_compile watcher_v4.py
-          python -m py_compile social_watcher.py
-          python -m py_compile social_watcher_v2.py
-          python -m py_compile social_watcher_v3.py
           python -m py_compile telegram_notify.py
           python -m unittest -v test_telegram_notify.py
-          python -m unittest -v test_social_watcher.py
           python -m py_compile merge_state.py persist_state.py telegram_radar.py
           python -m unittest -v test_radar.py
           python -c "import watcher_v3 as w; assert 'TEST123' in w.extract_codes('promo code: TEST123')"
-          python -c "import social_watcher_v3 as s; assert s.is_nmt_related('NMT.GG promo')"
+          python -m py_compile youtube_watcher.py
+          python -m unittest -v test_telegram_paging.py
 
       - name: Choose fast or deep scan
         if: ${{ github.event_name != 'pull_request' }}
@@ -87,10 +82,10 @@ jobs:
             echo "Deep scan forced by $event"
           elif (( run_no % 5 == 0 )); then
             echo "mode=deep" >> "$GITHUB_OUTPUT"
-            echo "Deep scan: Telegram + mirrors + web + free X + YouTube metadata/comments/Shorts"
+            echo "Deep scan: Telegram history + NMT pages + YouTube metadata/comments"
           else
             echo "mode=fast" >> "$GITHUB_OUTPUT"
-            echo "Fast scan: Telegram + NMT pages + free official X"
+            echo "Fast scan: Telegram + NMT pages"
           fi
 
       - name: Scan Telegram and web sources
@@ -100,6 +95,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           ALERT_THREAD: "1"
+          TELEGRAM_PAGE_LIMIT: ${{ steps.mode.outputs.mode == 'deep' && '3' || '1' }}
           PYTHONUNBUFFERED: "1"
         run: python watcher_v4.py --mode fast
 
@@ -114,7 +110,7 @@ jobs:
           PYTHONUNBUFFERED: "1"
         run: python telegram_notify.py
 
-      - name: Scan free X YouTube comments and Shorts
+      - name: Scan YouTube descriptions and comments
         id: social
         if: ${{ github.event_name != 'pull_request' }}
         env:
@@ -123,11 +119,11 @@ jobs:
           PYTHONUNBUFFERED: "1"
         run: |
           set +e
-          timeout 180s python social_watcher_v3.py --mode "${{ steps.mode.outputs.mode }}"
+          timeout 180s python youtube_watcher.py --mode "${{ steps.mode.outputs.mode }}"
           result=$?
           if [ "$result" -eq 124 ]; then
-            echo "::warning::Social scan exceeded 180 seconds; primary scan and delivery completed separately."
-            echo "Social scan: time budget exceeded; coverage incomplete." >> "$GITHUB_STEP_SUMMARY"
+            echo "::warning::YouTube scan exceeded 180 seconds; primary scan and delivery completed separately."
+            echo "YouTube scan: time budget exceeded; coverage incomplete." >> "$GITHUB_STEP_SUMMARY"
           else
             exit "$result"
           fi
