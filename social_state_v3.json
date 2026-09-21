@@ -1,23 +1,24 @@
 {
   "version": 3,
   "seen_event_ids": [
-    "e0f211570fa0884a11a6d1af"
+    "e0f211570fa0884a11a6d1af",
+    "72fe01ea554493e90194cd9f"
   ],
   "last_alert": {
     "ASS22ZA234": "2026-09-18T17:29:32.873945+00:00"
   },
   "initialized": true,
-  "updated_at": "2026-09-21T04:56:12.494231+00:00",
+  "updated_at": "2026-09-21T05:09:52.335256+00:00",
   "source_health": {
     "x_official": {
-      "checked_at": "2026-09-21T04:56:12.496879+00:00",
+      "checked_at": "2026-09-21T05:09:52.338030+00:00",
       "retry_after_seconds": 1800,
-      "primary": "cooldown",
+      "primary": "rate_limited",
       "error": "429 Client Error: Too Many Requests for url: https://syndication.twitter.com/srv/timeline-profile/screen-name/nmt_off",
       "fallback": "ok",
       "fallback_error": "403 Client Error: Forbidden for url: https://r.jina.ai/http://twitter.com/nmt_off",
-      "consecutive_primary_failures": 30,
-      "cooldown_until": "2026-09-21T04:58:57.970611+00:00"
+      "consecutive_primary_failures": 31,
+      "cooldown_until": "2026-09-21T05:39:52.335256+00:00"
     }
   }
 }
