@@ -4,6 +4,7 @@ import subprocess
 from datetime import datetime, timezone
 
 import watcher_v3 as w
+import telegram_radar as radar
 
 # Extend the core watcher with the Turkish phrase "promosyon kodu" without
 # duplicating the stable v3 implementation.
@@ -94,5 +95,10 @@ def scan_youtube_fixed():
 
 w.scan_youtube = scan_youtube_fixed
 
+w.scan_telegram = lambda name, channel: radar.scan_telegram(name, channel, w)
+
 if __name__ == "__main__":
-    w.main()
+    try:
+        w.main()
+    finally:
+        radar.write_report()

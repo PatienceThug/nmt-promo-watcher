@@ -1,4 +1,5 @@
 import argparse
+import os
 import json
 import re
 import subprocess
@@ -394,6 +395,10 @@ def _record_x_health(state):
         health["cooldown_until"] = old.get("cooldown_until")
     state["source_health"]["x_official"] = health
     print("[V3 HEALTH] x_official=" + json.dumps(health, ensure_ascii=False, sort_keys=True))
+    if os.environ.get("GITHUB_STEP_SUMMARY"):
+        with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as out:
+            out.write("\n## X coverage\n\nPrimary: " + str(health.get("primary", "unknown")) +
+                      "; fallback: " + str(health.get("fallback", "not used")) + "\n")
 
 
 def scan(mode, state):

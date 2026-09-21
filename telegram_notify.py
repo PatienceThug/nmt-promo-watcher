@@ -212,6 +212,9 @@ def alert_message(issue):
             parts += ["", f"GitHub kaydı: {issue_url}"]
         return "\n".join(parts)
 
+    if title.startswith("⚠️ NMT WATCHER HEALTH: Workflow delivery"):
+        return f"⚠️ NMT bildirim/durum kaydı sorunu.\n\n{body.splitlines()[0] if body else 'Tarama sonucu ayrıca kontrol edilmeli.'}\n\nDetay: {issue_url}"
+
     if title.startswith("⚠️ NMT WATCHER HEALTH: Workflow"):
         return f"⚠️ NMT taraması başarısız oldu.\n\nDetay: {issue_url}"
 
@@ -262,6 +265,10 @@ def notify_issues(state, issues, chat_id):
         if health_at:
             state["last_health_sent_at"] = health_at
         save_state(state)
+        # Save receipts immediately, before a later source/state failure can lose them.
+        if os.environ.get("GITHUB_ACTIONS") == "true":
+            from persist_state import persist_files
+            persist_files({"telegram_state.json": state})
     state["sent_codes"] = sorted(codes)
     save_state(state)
     print(f"[TG] delivered={delivered}, suppressed={suppressed}")
