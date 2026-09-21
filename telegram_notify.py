@@ -266,7 +266,7 @@ def notify_issues(state, issues, chat_id):
             state["last_health_sent_at"] = health_at
         save_state(state)
         # Save receipts immediately, before a later source/state failure can lose them.
-        if os.environ.get("GITHUB_ACTIONS") == "true":
+        if os.environ.get("NMT_PERSIST_RECEIPTS") == "1":
             from persist_state import persist_files
             persist_files({"telegram_state.json": state})
     state["sent_codes"] = sorted(codes)
