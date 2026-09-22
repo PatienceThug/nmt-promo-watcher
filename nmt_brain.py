@@ -673,32 +673,71 @@ def handle(state, uid, text):
         return None
     cmd = p[0].split("@", 1)[0].lower()
     args = p[1:]
+
     if cmd in ("/nmt", "/durum"):
         return dashboard(state)
     if cmd in ("/help", "/yardim", "/yardım"):
         return help_text()
+
+    if cmd == "/pbset":
+        if not args:
+            return "Kullanım: /pbset 1 1 1 1 1 veya /pbset 5x5 2x2 1x2"
+        areas = strat.normalize_areas(args)
+        state.setdefault("strategy", {})["footprints"] = areas
+        state["strategy"]["profile_updated_at"] = utcnow().isoformat()
+        return "✅ PB profili kaydedildi.\n\n" + strategy_profile_text(state)
+
+    if cmd in ("/profile", "/profil"):
+        hours = num(args[0]) if args else Decimal("12")
+        if hours <= 0 or hours > 720:
+            return "Saat 0–720 arasında olmalı."
+        return strategy_profile_text(state, hours)
+
+    if cmd == "/streak":
+        if not args:
+            return "Kullanım: /streak <round_sayısı>. Örnek: /streak 72"
+        return streak_text(state, int(args[0]))
+
+    if cmd == "/target":
+        if not args:
+            return "Kullanım: /target <USD_hedef> [saat]. Örnek: /target 21 12"
+        hours = num(args[1]) if len(args) > 1 else Decimal("12")
+        return target_text(state, args[0], hours)
+
+    if cmd == "/upgrade":
+        if len(args) < 2:
+            return "Kullanım: /upgrade <ek_kare> <maliyet_NMT>. Örnek: /upgrade 20 1000"
+        extra = strat.parse_footprint(args[0])
+        return upgrade_text(state, extra, args[1])
+
+    if cmd == "/flip":
+        if len(args) < 2:
+            return "Kullanım: /flip <alış_NMT> <hedef_satış_NMT>"
+        return flip_text(args[0], args[1])
+
+    if cmd == "/mergecalc":
+        if len(args) < 3:
+            return "Kullanım: /mergecalc <fig1_değer> <fig2_değer> <üst_level_değer>"
+        return merge_text(args[0], args[1], args[2])
+
+    if cmd == "/collectionroi":
+        if len(args) < 2:
+            return "Kullanım: /collectionroi <tamamlama_maliyeti_NMT> <günlük_NMT>"
+        return collection_roi_text(args[0], args[1])
+
     if cmd == "/round":
         if len(args) < 2:
             return "Kullanım: /round <ödül_NMT> <harcanan_Power> [not]"
         reward, spent = num(args[0]), num(args[1])
-        if reward < 0 or spent <= 0:
-            return "Ödül 0 veya üstü; Power 0'dan büyük olmalı."
-        rid = f"tg-{uid}"
-        if not any(x.get("id") == rid for x in state.get("power_rounds", [])):
-            state.setdefault("power_rounds", []).append({
-                "id": rid,
-                "at": utcnow().isoformat(),
-                "reward_nmt": str(reward),
-                "power_spent": str(spent),
-                "note": " ".join(args[2:])[:160],
-            })
-            if reward > 0:
-                add_entry(state, uid, "income", "power_blocks", reward, " ".join(args[2:]))
-        efficiency = reward / spent
+        rid = f"cmd-{uid}"
+        added = record_round_result(state, rid, reward, spent, " ".join(args[2:]))
+        efficiency = reward / spent if spent > 0 else Decimal("0")
+        prefix = "✅ Round kaydedildi" if added else "ℹ️ Bu round zaten kayıtlı"
         return (
-            f"✅ Round kaydedildi: {show(reward)} NMT / {show(spent)} Power = "
-            f"{show(efficiency)} NMT/Power. Toplam round verisi büyüdükçe Brain bunu karşılaştıracak."
+            f"{prefix}: {show(reward)} NMT / {show(spent)} Power = {show(efficiency)} NMT/Power.\n\n"
+            + round_summary_text(state)
         )
+
     specs = {
         "/pb": ("income", "power_blocks", "⚡ Power Blocks"),
         "/col": ("income", "collections", "🧩 Collection"),
@@ -714,6 +753,7 @@ def handle(state, uid, text):
         kind, cat, label = specs[cmd]
         add_entry(state, uid, kind, cat, args[0], " ".join(args[1:]))
         return f"✅ {label}: {show(num(args[0]))} NMT kaydedildi."
+
     if cmd == "/limit":
         if not args:
             return "Kullanım: /limit <NMT>"
@@ -722,6 +762,7 @@ def handle(state, uid, text):
             return "Limit negatif olamaz."
         state["settings"]["daily_outflow_limit_nmt"] = str(v)
         return f"🛡️ Günlük gider limiti: {show(v)} NMT" if v else "🛡️ Günlük limit kapatıldı."
+
     if cmd == "/rate":
         if not args:
             return "Kullanım: /rate <USD/NMT>"
@@ -730,12 +771,25 @@ def handle(state, uid, text):
             return "Kur negatif olamaz."
         state["settings"]["manual_usd_per_nmt"] = str(v)
         return f"💱 Manuel kur: 1 NMT = {show(v,6)} USD"
+
     if cmd == "/ev":
         return ev_calc(args)
     if cmd == "/colcalc":
         return collection_calc(args)
     if cmd == "/lucky":
         return lucky_calc(args)
+    if cmd == "/rounds":
+        return round_summary_text(state)
+    if cmd == "/rules":
+        return (
+            "📚 DOĞRULANMIŞ KURALLAR\n\n"
+            "Power Blocks: 100x100 tahta, yaklaşık 100–190 winner, hit başına 15 NMT, settle'da footprint alanı kadar Power gider.\n"
+            "Slot: başlangıç 5, account level başına +1, maksimum 19.\n"
+            "Merge: 2 aynı figür + aynı level → sonraki level.\n"
+            "Marketplace fee: güncel resmî Lucky Buy rehberinde olağan fee %10.\n"
+            "Lucky Buy: güncel house edge %10.\n\n"
+            "Topluluk kazanç paylaşımlarını kural veya garanti olarak kullanmıyorum."
+        )
     if cmd == "/undo":
         if not state["ledger"]:
             return "Silinecek kayıt yok."
@@ -744,7 +798,6 @@ def handle(state, uid, text):
     if cmd.startswith("/"):
         return "Bu komutu tanımıyorum. /help yaz."
     return None
-
 
 def main():
     state = load_state()
