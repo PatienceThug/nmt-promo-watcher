@@ -79,6 +79,37 @@ def saved_chat_id():
         return ""
 
 
+
+def apply_confirmed_round_correction(state):
+    """Apply the user's 2026-09-22 correction; never reset subsequent rounds."""
+    changed = False
+    corrected_ids = {"cb-324477642062259493", "cb-324477641443968109"}
+    note = "Kullanıcı düzeltmesi: ödül alınmadı (22 Eylül 2026)"
+    for row in state.get("ledger", []):
+        if row.get("id") in {"tg-" + rid for rid in corrected_ids}:
+            if row.get("amount_nmt") != "0":
+                row["amount_nmt"] = "0"
+                row["note"] = note
+                changed = True
+    for row in state.get("power_rounds", []):
+        if row.get("id") in corrected_ids and row.get("reward_nmt") != "0":
+            row["reward_nmt"] = "0"
+            row["note"] = note
+            changed = True
+    # Two additional zero-reward rounds confirmed by the user, with stable IDs.
+    rows = state.setdefault("power_rounds", [])
+    for index in (21, 22):
+        rid = f"user-correction-20260922-round-{index}"
+        if not any(row.get("id") == rid for row in rows):
+            rows.append({
+                "id": rid, "at": "2026-09-22T12:14:47+00:00",
+                "reward_nmt": "0", "power_spent": "5",
+                "note": "Kullanıcı beyanı: toplam 22 round, 0 NMT",
+            })
+            changed = True
+    return changed
+
+
 def load_state():
     default = {
         "version": 2, "initialized": False, "last_update_id": 0, "ledger": [], "power_rounds": [],
@@ -101,6 +132,8 @@ def load_state():
     data.setdefault("power", {})
     for k, v in default["power"].items():
         data["power"].setdefault(k, v)
+    if apply_confirmed_round_correction(data):
+        save_state(data)
     return data
 
 
