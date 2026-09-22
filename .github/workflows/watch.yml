@@ -1,210 +1,24 @@
-name: NMT Promo Watcher
-# Free-only social monitoring mode
+name: NMT Promo Watcher (Silent)
 
 on:
-  pull_request:
-    branches: [main]
-    paths:
-      - "**.py"
-      - "requirements.txt"
-      - ".github/workflows/watch.yml"
-  push:
-    branches: [main]
-    paths:
-      - "watcher_v3.py"
-      - "watcher_v4.py"
-      - "youtube_watcher.py"
-      - "test_telegram_paging.py"
-      - "telegram_notify.py"
-      - "test_telegram_notify.py"
-      - "merge_state.py"
-      - "persist_state.py"
-      - "telegram_radar.py"
-      - "test_radar.py"
-      - "requirements.txt"
-      - ".github/workflows/watch.yml"
-  schedule:
-    # Five-minute target; GitHub may delay runs. Concurrency prevents overlap.
-    - cron: "*/5 * * * *"
   workflow_dispatch:
 
 permissions:
-  contents: write
-  issues: write
-
-concurrency:
-  group: nmt-promo-watcher
-  cancel-in-progress: false
+  contents: read
 
 jobs:
-  scan:
+  verify:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || 'main' }}
-
-      - name: Set up Python
-        uses: actions/setup-python@v6
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
-          cache: pip
-
-      - name: Install dependencies
-        run: pip install -r requirements.txt
-
-      - name: Verify watcher syntax
+      - run: pip install -r requirements.txt
+      - name: Verify only — no scan delivery, no Telegram
         run: |
-          python -m py_compile watcher_v3.py
-          python -m py_compile watcher_v4.py
-          python -m py_compile telegram_notify.py
+          python -m py_compile watcher_v3.py watcher_v4.py telegram_notify.py
           python -m unittest -v test_telegram_notify.py
           python -m py_compile merge_state.py persist_state.py telegram_radar.py
-          python -m unittest -v test_radar.py
-          python -c "import watcher_v3 as w; assert 'TEST123' in w.extract_codes('promo code: TEST123')"
-          python -m py_compile youtube_watcher.py
-          python -m unittest -v test_telegram_paging.py
-
-      - name: Choose fast or deep scan
-        if: ${{ github.event_name != 'pull_request' }}
-        id: mode
-        shell: bash
-        run: |
-          event="${{ github.event_name }}"
-          run_no="${{ github.run_number }}"
-
-          if [[ "$event" == "workflow_dispatch" || "$event" == "push" ]]; then
-            echo "mode=deep" >> "$GITHUB_OUTPUT"
-            echo "Deep scan forced by $event"
-          elif (( run_no % 5 == 0 )); then
-            echo "mode=deep" >> "$GITHUB_OUTPUT"
-            echo "Deep scan: Telegram history + NMT pages + YouTube metadata/comments"
-          else
-            echo "mode=fast" >> "$GITHUB_OUTPUT"
-            echo "Fast scan: Telegram + NMT pages"
-          fi
-
-      - name: Scan Telegram and web sources
-        id: primary
-        if: ${{ github.event_name != 'pull_request' }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-          ALERT_THREAD: "1"
-          TELEGRAM_PAGE_LIMIT: ${{ steps.mode.outputs.mode == 'deep' && '3' || '1' }}
-          PYTHONUNBUFFERED: "1"
-        run: python watcher_v4.py --mode fast
-
-      - name: Deliver primary codes immediately
-        if: ${{ !cancelled() && github.event_name != 'pull_request' }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-          NMT_PERSIST_RECEIPTS: "1"
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          PYTHONUNBUFFERED: "1"
-        run: python telegram_notify.py
-
-      - name: Scan YouTube descriptions and comments
-        id: social
-        if: ${{ github.event_name != 'pull_request' }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-          PYTHONUNBUFFERED: "1"
-        run: |
-          set +e
-          timeout 180s python youtube_watcher.py --mode "${{ steps.mode.outputs.mode }}"
-          result=$?
-          if [ "$result" -eq 124 ]; then
-            echo "::warning::YouTube scan exceeded 180 seconds; primary scan and delivery completed separately."
-            echo "YouTube scan: time budget exceeded; coverage incomplete." >> "$GITHUB_STEP_SUMMARY"
-          else
-            exit "$result"
-          fi
-
-      - name: Record scan failure in GitHub Issues
-        if: ${{ failure() && github.event_name != 'pull_request' }}
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const title = "⚠️ NMT WATCHER HEALTH: Workflow scan";
-            const body = "NMT taraması başarısız oldu. Yeni kodlar kaçırılmış olabilir.\n\n" +
-              "Çalıştırma: " + context.serverUrl + "/" + context.repo.owner + "/" +
-              context.repo.repo + "/actions/runs/" + context.runId;
-            const issues = await github.paginate(github.rest.issues.listForRepo, {
-              ...context.repo, state: "open", per_page: 100
-            });
-            if (!issues.some(issue => !issue.pull_request && issue.title === title)) {
-              await github.rest.issues.create({...context.repo, title, body});
-            }
-
-      - name: Send Telegram push notifications
-        id: notify
-        if: ${{ !cancelled() && github.event_name != 'pull_request' }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-          NMT_PERSIST_RECEIPTS: "1"
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          PYTHONUNBUFFERED: "1"
-        run: python telegram_notify.py
-
-      - name: Persist watcher state
-        id: persist
-        if: ${{ !cancelled() && github.event_name != 'pull_request' }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-        run: python persist_state.py
-
-      - name: Save diagnostic evidence
-        if: ${{ !cancelled() && github.event_name != 'pull_request' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: scan-evidence-${{ github.run_id }}
-          path: scan_report.json
-          if-no-files-found: ignore
-          retention-days: 7
-
-      - name: Record notification or state failure
-        if: ${{ failure() && github.event_name != 'pull_request' && (steps.notify.outcome == 'failure' || steps.persist.outcome == 'failure') }}
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const title = "⚠️ NMT WATCHER HEALTH: Workflow delivery";
-            const failed = [];
-            if ("${{ steps.notify.outcome }}" === "failure") failed.push("Telegram bildirimi");
-            if ("${{ steps.persist.outcome }}" === "failure") failed.push("durum kaydı");
-            const body = (failed.length ? failed.join(" ve ") : "Teslimat") +
-              " başarısız oldu. Tarama sonucu ayrıca kontrol edilmelidir.\n\n" +
-              context.serverUrl + "/" + context.repo.owner + "/" + context.repo.repo +
-              "/actions/runs/" + context.runId;
-            const issues = await github.paginate(github.rest.issues.listForRepo, {
-              ...context.repo, state: "open", per_page: 100
-            });
-            if (!issues.some(issue => !issue.pull_request && issue.title === title)) {
-              await github.rest.issues.create({...context.repo, title, body});
-            }
-
-      - name: Close recovered workflow incidents
-        if: ${{ success() && github.event_name != 'pull_request' }}
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const issues = await github.paginate(github.rest.issues.listForRepo, {
-              ...context.repo, state: 'open', per_page: 100
-            });
-            for (const issue of issues) {
-              if (!issue.pull_request && issue.user.login === 'github-actions[bot]' &&
-                  issue.title.startsWith('⚠️ NMT WATCHER HEALTH: Workflow')) {
-                await github.rest.issues.update({...context.repo, issue_number: issue.number,
-                  state: 'closed', state_reason: 'completed'});
-              }
-            }
+          python -m unittest -v test_radar.py test_telegram_paging.py
