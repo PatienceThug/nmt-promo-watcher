@@ -1,7 +1,7 @@
 {
   "version": 2,
   "initialized": true,
-  "last_update_id": 25227350,
+  "last_update_id": 25227351,
   "ledger": [
     {
       "id": "tg-cb-324477642062259493",
@@ -24,7 +24,7 @@
     "daily_outflow_limit_nmt": 0,
     "manual_usd_per_nmt": 0
   },
-  "updated_at": "2026-09-22T12:10:52.137606+00:00",
+  "updated_at": "2026-09-22T12:11:36.735154+00:00",
   "power": {
     "enabled": true,
     "interval_minutes": 10,
