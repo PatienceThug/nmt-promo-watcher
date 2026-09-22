@@ -2,14 +2,12 @@ name: NMT Brain
 
 on:
   schedule:
-    - cron: "*/5 * * * *"
+    - cron: "*/30 * * * *"
   workflow_dispatch:
   push:
     branches: [main]
     paths:
       - "nmt_brain.py"
-      - "nmt_brain_state.json"
-      - "persist_state.py"
       - "test_nmt_brain.py"
       - ".github/workflows/nmt-brain.yml"
 
@@ -17,33 +15,42 @@ permissions:
   contents: write
 
 concurrency:
-  group: nmt-brain
+  group: nmt-brain-live-worker
   cancel-in-progress: false
 
 jobs:
   brain:
     runs-on: ubuntu-latest
-    timeout-minutes: 4
+    timeout-minutes: 42
     steps:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 1
+
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
+
       - run: pip install requests==2.32.5
+
       - name: Verify NMT Brain
         run: |
           python -m py_compile nmt_brain.py persist_state.py
           python -m unittest -v test_nmt_brain.py
-      - name: Process Telegram commands
+
+      - name: Run responsive NMT Brain worker
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          PYTHONUNBUFFERED: "1"
-        run: python nmt_brain.py
-      - name: Persist NMT Brain state
-        env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-        run: python persist_state.py
+          PYTHONUNBUFFERED: "1"
+        shell: bash
+        run: |
+          # Keep one worker alive for ~35 minutes. This avoids relying on
+          # GitHub's imprecise 5-minute scheduler for Telegram buttons/timers.
+          for i in {1..105}; do
+            python nmt_brain.py || true
+            python persist_state.py || true
+            sleep 20
+          done
