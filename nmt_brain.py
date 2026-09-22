@@ -150,11 +150,63 @@ def send_power_reminder(chat_id, state):
                 {"text": "✅ Yerleştirdim", "callback_data": "pb_placed"},
                 {"text": "⏰ +5 dk", "callback_data": "pb_snooze5"},
             ],
-            [{"text": "📊 NMT Brain", "callback_data": "brain_status"}],
+            [{"text": "🧠 NMT Brain", "callback_data": "brain_menu"}],
         ],
     )
     state["power"]["last_sent_at"] = utcnow().isoformat()
     set_power_due(state)
+
+
+def safe_answer_callback(qid, text=""):
+    if not qid:
+        return
+    payload = {"callback_query_id": qid}
+    if text:
+        payload["text"] = text
+    try:
+        tg("answerCallbackQuery", payload)
+    except Exception as exc:
+        # Old Telegram callback queries can expire. The requested action must
+        # still happen even when the small popup acknowledgement cannot.
+        print(f"[BRAIN] callback ack skipped: {str(exc)[:140]}")
+
+
+def brain_menu_text(state):
+    p = state.get("power", {})
+    raw = p.get("next_at") or ""
+    due_text = "hazırlanıyor"
+    if raw:
+        try:
+            due = datetime.fromisoformat(raw).astimezone(IST)
+            due_text = due.strftime("%H:%M:%S")
+        except Exception:
+            pass
+    return (
+        "🧠 NMT BRAIN\n\n"
+        "Bu, NMT hesabına giriş yapmayan kişisel yardımcı panelin. "
+        "Kazanç/gider kayıtlarını, Power Blocks verimini ve teorik hesapları burada görürsün.\n\n"
+        f"⚡ Sonraki PB kontrolü: {due_text}\n"
+        f"📒 Kayıtlı round: {len(state.get('power_rounds', []))}\n"
+        f"💰 Muhasebe kaydı: {len(state.get('ledger', []))}"
+    )
+
+
+def send_brain_menu(chat_id, state):
+    send(
+        chat_id,
+        brain_menu_text(state),
+        buttons=[
+            [
+                {"text": "📊 Durum", "callback_data": "brain_status"},
+                {"text": "⚡ EV 25", "callback_data": "brain_ev25"},
+            ],
+            [
+                {"text": "📒 Komutlar", "callback_data": "brain_help"},
+                {"text": "⏱ Sayaç", "callback_data": "brain_timer"},
+            ],
+            [{"text": "⚡ Power Blocks Aç", "url": "https://nmt.gg/power-blocks"}],
+        ],
+    )
 
 
 def handle_callback(state, chat_id, query):
@@ -163,18 +215,41 @@ def handle_callback(state, chat_id, query):
     if data == "pb_placed":
         state["power"]["last_placed_at"] = utcnow().isoformat()
         set_power_due(state)
-        tg("answerCallbackQuery", {"callback_query_id": qid, "text": "✅ Sayaç 10 dakika için yenilendi."})
+        safe_answer_callback(qid, "✅ Sayaç 10 dakika için yenilendi.")
         return True
     if data == "pb_snooze5":
         set_power_due(state, 5)
-        tg("answerCallbackQuery", {"callback_query_id": qid, "text": "⏰ 5 dakika erteledim."})
+        safe_answer_callback(qid, "⏰ 5 dakika erteledim.")
+        return True
+    if data == "brain_menu":
+        safe_answer_callback(qid)
+        send_brain_menu(chat_id, state)
         return True
     if data == "brain_status":
-        tg("answerCallbackQuery", {"callback_query_id": qid})
+        safe_answer_callback(qid)
         send(chat_id, dashboard(state))
         return True
-    if qid:
-        tg("answerCallbackQuery", {"callback_query_id": qid})
+    if data == "brain_ev25":
+        safe_answer_callback(qid)
+        send(chat_id, ev_calc(["25"]))
+        return True
+    if data == "brain_help":
+        safe_answer_callback(qid)
+        send(chat_id, help_text())
+        return True
+    if data == "brain_timer":
+        safe_answer_callback(qid)
+        raw = state.get("power", {}).get("next_at") or ""
+        if raw:
+            try:
+                due = datetime.fromisoformat(raw).astimezone(IST).strftime("%H:%M:%S")
+                send(chat_id, f"⏱ Power Blocks sonraki kontrol: {due} (Türkiye saati)")
+            except Exception:
+                send(chat_id, "⏱ Power Blocks sayacı aktif.")
+        else:
+            send(chat_id, "⏱ Power Blocks sayacı aktif.")
+        return True
+    safe_answer_callback(qid)
     return False
 
 
