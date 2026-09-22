@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "initialized": true,
   "last_update_id": 25227321,
   "ledger": [],
@@ -7,12 +7,12 @@
     "daily_outflow_limit_nmt": 0,
     "manual_usd_per_nmt": 0
   },
-  "updated_at": "2026-09-22T06:46:46.985874+00:00",
+  "updated_at": "2026-09-22T06:47:21.354327+00:00",
   "power": {
     "enabled": true,
     "interval_minutes": 10,
-    "next_at": "2026-09-22T06:56:46.985840+00:00",
-    "last_sent_at": "2026-09-22T06:46:46.985817+00:00",
+    "next_at": "2026-09-22T06:57:21.354296+00:00",
+    "last_sent_at": "2026-09-22T06:47:21.354284+00:00",
     "last_placed_at": "2026-09-22T06:26:25.615466+00:00"
   },
   "power_rounds": [],
@@ -24,6 +24,6 @@
       1,
       1
     ],
-    "profile_updated_at": ""
+    "profile_updated_at": "2026-09-22T06:46:00+00:00"
   }
 }
