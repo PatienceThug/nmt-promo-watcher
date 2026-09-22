@@ -13,6 +13,7 @@ on:
       - "test_nmt_brain.py"
       - "test_nmt_strategy.py"
       - "persist_state.py"
+      - "audit_project.py"
       - ".github/workflows/nmt-brain.yml"
 
 permissions:
@@ -40,8 +41,9 @@ jobs:
 
       - name: Verify NMT Brain
         run: |
-          python -m py_compile nmt_brain.py nmt_strategy.py persist_state.py
+          python -m py_compile nmt_brain.py nmt_strategy.py persist_state.py audit_project.py
           python -m unittest -v test_nmt_brain.py test_nmt_strategy.py
+          python audit_project.py
 
       - name: Run responsive NMT Brain worker
         env:
