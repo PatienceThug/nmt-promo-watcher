@@ -1,10 +1,11 @@
 {
   "version": 1,
-  "initialized": false,
-  "last_update_id": 0,
+  "initialized": true,
+  "last_update_id": 25227313,
   "ledger": [],
   "settings": {
     "daily_outflow_limit_nmt": 0,
     "manual_usd_per_nmt": 0
-  }
+  },
+  "updated_at": "2026-09-22T01:15:56.320589+00:00"
 }
