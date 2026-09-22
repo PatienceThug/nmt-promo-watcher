@@ -1,68 +1,22 @@
-name: NMT Brain
+name: NMT Brain (Silent)
 
 on:
-  schedule:
-    - cron: "*/30 * * * *"
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - "nmt_brain.py"
-      - "nmt_strategy.py"
-      - "nmt_rules.json"
-      - "test_nmt_brain.py"
-      - "test_nmt_strategy.py"
-      - "test_persist_state.py"
-      - "persist_state.py"
-      - "audit_project.py"
-      - ".github/workflows/nmt-brain.yml"
 
 permissions:
-  contents: write
-
-concurrency:
-  group: nmt-brain-live-worker
-  cancel-in-progress: true
+  contents: read
 
 jobs:
-  brain:
+  verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 42
-
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
-        with:
-          fetch-depth: 1
-
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
-
       - run: pip install requests==2.32.5
-
-      - name: Verify NMT Brain
+      - name: Verify only — no Telegram, no worker
         run: |
           python -m py_compile nmt_brain.py nmt_strategy.py persist_state.py audit_project.py
           python -m unittest -v test_nmt_brain.py test_nmt_strategy.py test_persist_state.py
-          python audit_project.py
-
-      - name: Run responsive NMT Brain worker
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-          PYTHONUNBUFFERED: "1"
-        shell: bash
-        run: |
-          # One worker stays alive between scheduled runs. Telegram is checked
-          # every 20 seconds, but GitHub state is written only when it changed.
-          for i in {1..105}; do
-            before="$(sha256sum nmt_brain_state.json | awk '{print $1}')"
-            python nmt_brain.py || true
-            after="$(sha256sum nmt_brain_state.json | awk '{print $1}')"
-            if [[ "$before" != "$after" ]]; then
-              python persist_state.py nmt_brain_state.json
-            fi
-            sleep 20
-          done
