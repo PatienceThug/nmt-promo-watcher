@@ -144,18 +144,42 @@ def power_due(state):
 
 
 def send_power_reminder(chat_id, state):
+    areas = strategy_areas(state)
+    profile_line = ""
+    if areas:
+        m = strat.profile_metrics(areas, 1)
+        profile_line = (
+            f"\n🎯 Profil: {len(areas)} slot / {sum(areas)} kare · "
+            f"tek round hit ihtimali yaklaşık %{strat.fmt(m['mid']['hit_probability']*100, 2)}"
+        )
     send(
         chat_id,
         "⚡ POWER BLOCKS — KONTROL ZAMANI\n\n"
-        "Yaklaşık 10 dakikalık pencere doldu. Yeni round'u kontrol et; yerleştirdikten sonra "
-        "✅ Yerleştirdim'e basarsan sayaç o ana göre yeniden başlar.",
+        "Yeni round'u kontrol et. Yerleştirdikten sonra ✅ Yerleştirdim'e bas; sayaç o ana göre yenilensin."
+        + profile_line
+        + "\n\nÖnceki settle ödülünü tek dokunuşla kaydet:",
         buttons=[
             [{"text": "⚡ Power Blocks Aç", "url": "https://nmt.gg/power-blocks"}],
             [
                 {"text": "✅ Yerleştirdim", "callback_data": "pb_placed"},
                 {"text": "⏰ +5 dk", "callback_data": "pb_snooze5"},
             ],
-            [{"text": "🧠 NMT Brain", "callback_data": "brain_menu"}],
+            [
+                {"text": "0", "callback_data": "pb_reward_0"},
+                {"text": "15", "callback_data": "pb_reward_15"},
+                {"text": "30", "callback_data": "pb_reward_30"},
+                {"text": "45", "callback_data": "pb_reward_45"},
+            ],
+            [
+                {"text": "60", "callback_data": "pb_reward_60"},
+                {"text": "75", "callback_data": "pb_reward_75"},
+                {"text": "90", "callback_data": "pb_reward_90"},
+                {"text": "120", "callback_data": "pb_reward_120"},
+            ],
+            [
+                {"text": "✍️ Diğer", "callback_data": "pb_reward_other"},
+                {"text": "🧠 NMT Brain", "callback_data": "brain_menu"},
+            ],
         ],
     )
     state["power"]["last_sent_at"] = utcnow().isoformat()
