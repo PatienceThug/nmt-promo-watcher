@@ -330,6 +330,94 @@ def collection_roi_text(cost_nmt, daily_nmt):
     )
 
 
+def market_min_text(buy_price):
+    buy = num(buy_price)
+    resale = strat.market_break_even_resale(buy)
+    spread = resale - buy
+    return (
+        "🧾 MARKETPLACE BAŞABAŞ\n\n"
+        f"Alış: {show(buy)} NMT\n"
+        f"%10 fee sonrası zarar etmemek için minimum satış: {strat.fmt(resale, 4)} NMT\n"
+        f"Gerekli brüt fiyat farkı: +{strat.fmt(spread, 4)} NMT "
+        f"(+%{strat.fmt((resale/buy-1)*100 if buy>0 else 0, 2)})\n\n"
+        "Bu sadece fee başabaşıdır; satış gecikmesi ve fiyat düşüşü dahil değildir."
+    )
+
+
+def nft_check_text(price_nmt, current_power, footprint):
+    r = strat.nft_pb_screen(price_nmt, current_power, footprint)
+    return (
+        "🔎 NFT → POWER BLOCKS EKRANI\n\n"
+        f"Fiyat: {strat.fmt(r['price_nmt'])} NMT\n"
+        f"Mevcut Power: {strat.fmt(current_power)}\n"
+        f"Footprint bandı: {r['footprint']} ({r['area']} kare)\n"
+        f"Band alt eşiği: {r['threshold']} Power\n"
+        f"Bu bandda kalabilecek yaklaşık settle: {r['rounds']}\n"
+        f"145 winner varsayımıyla band boyunca brüt PB EV: {strat.fmt(r['band_gross_ev_nmt'])} NMT\n"
+        f"NFT fiyatının bu bandda teorik geri kazanımı: %{strat.fmt(r['price_recovery_ratio']*100, 2)}\n\n"
+        "⚠️ Bu yalnız mevcut footprint bandının PB brüt EV'sidir. Daha alt footprint bandlarındaki sonraki gelir, "
+        "NFT'nin yeniden satış değeri, Collection/Merge değeri ve piyasa riski dahil değildir."
+    )
+
+
+def plan_text(state):
+    areas = strategy_areas(state)
+    if not areas:
+        return "Önce /pbset ile mevcut Power Blocks footprint profilini ayarla."
+    m = strat.profile_metrics(areas, 12)
+    area = m["area"]
+    mid = m["mid"]
+    rounds = state.get("power_rounds", [])
+    lines = [
+        "🧠 NMT BRAIN — KAZANÇ PLANI",
+        "",
+        f"Mevcut PB: {len(areas)} slot / {area} kare",
+        f"Tek round orta hit ihtimali: %{strat.fmt(mid['hit_probability']*100, 2)}",
+        f"12 saat orta teorik EV: {strat.fmt(mid['ev_period'])} NMT",
+        f"Kayıtlı gerçek round: {len(rounds)} ({strat.evidence_grade(len(rounds))})",
+        "",
+    ]
+    if area <= 10:
+        lines += [
+            "1) 🔬 Şu an PB kapasiten çok küçük. Kör yatırım yapma; önce gerçek round verisini topla.",
+            "2) 🔎 Büyük footprint NFT bakarken /nftcheck <fiyat> <power> <footprint> kullan. Fiyatına göre PB geri dönüşü zayıfsa ele.",
+        ]
+    else:
+        lines += [
+            "1) 📈 PB kararını teorik EV + kendi gerçek NMT/Power verinle birlikte değerlendir.",
+            "2) 🔎 Yeni NFT'de yalnız footprint değil, Power runway + fiyat + alternatif kullanım değerini kontrol et.",
+        ]
+    lines += [
+        "3) 🛒 Marketplace'te fee yüzünden sadece ucuz görünen ilan yetmez. /marketmin ve /flip ile net marjı kontrol et.",
+        "4) 🧩 Collection tamamlamasında /collectionroi kullan; günlük accrual ile tamamlama maliyetini kıyasla.",
+        "5) 🔀 Duplicate'i satmadan önce /mergecalc ile merge sonrası net değeri karşılaştır.",
+        "6) 🎲 Lucky Buy'ı gelir motoru sayma; resmî mekanikte house edge var. Power Pool'da ise figürün tamamı riskte.",
+        "",
+        "Hedef: önce kötü işlemleri elemek, sonra kişisel veride gerçekten çalışan yönteme daha fazla sermaye ayırmak.",
+    ]
+    return "\n".join(lines)
+
+
+def health_text(state):
+    p = state.get("power", {})
+    next_at = p.get("next_at") or "yok"
+    try:
+        next_at = datetime.fromisoformat(next_at).astimezone(IST).strftime("%H:%M:%S")
+    except Exception:
+        pass
+    return (
+        "🩺 NMT BRAIN HEALTH\n\n"
+        f"State schema: v{state.get('version', '?')}\n"
+        f"Telegram update cursor: {state.get('last_update_id', 0)}\n"
+        f"PB profil slotu: {len(strategy_areas(state))}\n"
+        f"Round kaydı: {len(state.get('power_rounds', []))}\n"
+        f"Muhasebe kaydı: {len(state.get('ledger', []))}\n"
+        f"Sonraki PB kontrolü: {next_at}\n"
+        f"Son state güncelleme: {state.get('updated_at', 'yok')}\n\n"
+        "NMT hesabına giriş/cookie/gameplay yetkisi yok; bu bot karar desteği + kayıt + bildirim katmanıdır."
+    )
+
+
 def brain_menu_text(state):
     p = state.get("power", {})
     raw = p.get("next_at") or ""
