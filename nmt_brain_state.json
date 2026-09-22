@@ -1,19 +1,19 @@
 {
   "version": 1,
   "initialized": true,
-  "last_update_id": 25227319,
+  "last_update_id": 25227320,
   "ledger": [],
   "settings": {
     "daily_outflow_limit_nmt": 0,
     "manual_usd_per_nmt": 0
   },
-  "updated_at": "2026-09-22T06:24:58.341150+00:00",
+  "updated_at": "2026-09-22T06:26:25.957713+00:00",
   "power": {
     "enabled": true,
     "interval_minutes": 10,
-    "next_at": "2026-09-22T06:34:58.341107+00:00",
+    "next_at": "2026-09-22T06:36:25.615486+00:00",
     "last_sent_at": "2026-09-22T06:24:58.341089+00:00",
-    "last_placed_at": ""
+    "last_placed_at": "2026-09-22T06:26:25.615466+00:00"
   },
   "power_rounds": []
 }
