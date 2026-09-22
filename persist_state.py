@@ -5,12 +5,51 @@ import os
 import time
 import sys
 from pathlib import Path
+from datetime import datetime, timezone
 
 import requests
 from merge_state import merge
 
 FILES = ('seen_codes.json', 'youtube_state.json', 'telegram_state.json', 'nmt_brain_state.json')
 
+
+
+def _parse_ts(value):
+    try:
+        return datetime.fromisoformat((value or "").replace("Z", "+00:00"))
+    except Exception:
+        return datetime.min.replace(tzinfo=timezone.utc)
+
+
+def _merge_rows_by_id(old_rows, new_rows):
+    rows = {}
+    order = []
+    for row in list(old_rows or []) + list(new_rows or []):
+        key = str(row.get("id", ""))
+        if not key:
+            key = json.dumps(row, sort_keys=True, ensure_ascii=False)
+        if key not in rows:
+            order.append(key)
+        rows[key] = row
+    return [rows[k] for k in order]
+
+
+def merge_brain_state(old, incoming):
+    """Event lists are unioned; mutable settings/profile come from newest state."""
+    old = old if isinstance(old, dict) else {}
+    incoming = incoming if isinstance(incoming, dict) else {}
+    old_ts = _parse_ts(old.get("updated_at"))
+    new_ts = _parse_ts(incoming.get("updated_at"))
+    newest = incoming if new_ts >= old_ts else old
+
+    result = dict(old)
+    result.update(newest)
+    result["version"] = max(int(old.get("version", 1)), int(incoming.get("version", 1)))
+    result["initialized"] = bool(old.get("initialized") or incoming.get("initialized"))
+    result["last_update_id"] = max(int(old.get("last_update_id", 0)), int(incoming.get("last_update_id", 0)))
+    result["ledger"] = _merge_rows_by_id(old.get("ledger", []), incoming.get("ledger", []))
+    result["power_rounds"] = _merge_rows_by_id(old.get("power_rounds", []), incoming.get("power_rounds", []))
+    return result
 
 def persist_files(incoming, request=None, sleep=time.sleep):
     repo = os.environ['GITHUB_REPOSITORY']
@@ -37,7 +76,7 @@ def persist_files(incoming, request=None, sleep=time.sleep):
                     if exc.response is None or exc.response.status_code != 404:
                         raise
                     old = {}
-                combined = merge(old, value)
+                combined = merge_brain_state(old, value) if name == "nmt_brain_state.json" else merge(old, value)
                 if combined != old:
                     entries.append({'path': name, 'mode': '100644', 'type': 'blob',
                                     'content': json.dumps(combined, indent=2, ensure_ascii=False) + '\n'})
