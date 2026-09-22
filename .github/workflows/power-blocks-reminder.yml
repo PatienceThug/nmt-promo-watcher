@@ -1,38 +1,19 @@
-name: NMT Power Blocks Reminder
+name: NMT Power Blocks Reminder Manual Test
 
 on:
-  schedule:
-    - cron: "*/10 * * * *"
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - "power_blocks_reminder.py"
-      - ".github/workflows/power-blocks-reminder.yml"
 
 permissions:
   contents: read
-
-concurrency:
-  group: nmt-power-blocks-reminder
-  cancel-in-progress: true
 
 jobs:
   remind:
     runs-on: ubuntu-latest
     timeout-minutes: 3
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-
-      - name: Send safe Telegram reminder
+      - uses: actions/checkout@v5
+      - name: Send manual test reminder
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: |
-          if [[ "${{ github.event_name }}" == "schedule" ]]; then
-            python3 power_blocks_reminder.py
-          else
-            python3 power_blocks_reminder.py --test
-          fi
+        run: python3 power_blocks_reminder.py --test
