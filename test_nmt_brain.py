@@ -30,6 +30,17 @@ class BrainMathTests(unittest.TestCase):
         b.add_entry(state, 42, "income", "power_blocks", "120")
         self.assertEqual(len(state["ledger"]), 1)
 
+    def test_round_efficiency_logging(self):
+        state = {
+            "ledger": [], "power_rounds": [],
+            "settings": {"daily_outflow_limit_nmt": "0", "manual_usd_per_nmt": "0"},
+            "power": {"enabled": True, "interval_minutes": 10, "next_at": "", "last_sent_at": "", "last_placed_at": ""}
+        }
+        text = b.handle(state, 99, "/round 120 25")
+        self.assertIn("4.8 NMT/Power", text)
+        self.assertEqual(len(state["power_rounds"]), 1)
+        self.assertEqual(len(state["ledger"]), 1)
+
 
 if __name__ == "__main__":
     unittest.main()
