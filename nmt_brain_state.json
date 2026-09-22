@@ -7,12 +7,12 @@
     "daily_outflow_limit_nmt": 0,
     "manual_usd_per_nmt": 0
   },
-  "updated_at": "2026-09-22T05:24:44.015276+00:00",
+  "updated_at": "2026-09-22T05:41:35.183615+00:00",
   "power": {
     "enabled": true,
     "interval_minutes": 10,
-    "next_at": "2026-09-22T05:34:44.015237+00:00",
-    "last_sent_at": "2026-09-22T05:24:44.015222+00:00",
+    "next_at": "2026-09-22T05:51:35.183579+00:00",
+    "last_sent_at": "2026-09-22T05:41:35.183560+00:00",
     "last_placed_at": ""
   },
   "power_rounds": []
