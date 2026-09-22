@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "initialized": false,
+  "last_update_id": 0,
+  "ledger": [],
+  "settings": {
+    "daily_outflow_limit_nmt": 0,
+    "manual_usd_per_nmt": 0
+  }
+}
