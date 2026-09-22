@@ -10,6 +10,7 @@ on:
       - "nmt_brain.py"
       - "nmt_brain_state.json"
       - "persist_state.py"
+      - "test_nmt_brain.py"
       - ".github/workflows/nmt-brain.yml"
 
 permissions:
@@ -32,7 +33,9 @@ jobs:
           python-version: "3.12"
       - run: pip install requests==2.32.5
       - name: Verify NMT Brain
-        run: python -m py_compile nmt_brain.py persist_state.py
+        run: |
+          python -m py_compile nmt_brain.py persist_state.py
+          python -m unittest -v test_nmt_brain.py
       - name: Process Telegram commands
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
