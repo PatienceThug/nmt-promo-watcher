@@ -1,0 +1,35 @@
+name: Send NMT Brain Menu
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/send-brain-menu.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: pip install requests==2.32.5
+      - name: Send fresh NMT Brain menu
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          python - <<'PY'
+          import nmt_brain as b
+          state = b.load_state()
+          chat_id = b.CHAT_ID or b.saved_chat_id()
+          if not chat_id:
+              raise SystemExit("Telegram chat id unavailable")
+          b.send_brain_menu(chat_id, state)
+          print("[BRAIN] fresh menu delivered")
+          PY
