@@ -26,12 +26,20 @@ def telegram(method, payload=None):
     if payload is not None:
         data = json.dumps(payload).encode("utf-8")
         headers["Content-Type"] = "application/json"
-    req = request.Request(url, data=data, headers=headers, method="POST" if data else "GET")
-    with request.urlopen(req, timeout=20) as response:
-        result = json.loads(response.read().decode("utf-8"))
-    if not result.get("ok"):
-        raise RuntimeError(f"Telegram API failed: {method}")
-    return result.get("result")
+    last = None
+    for attempt in range(3):
+        try:
+            req = request.Request(url, data=data, headers=headers, method="POST" if data else "GET")
+            with request.urlopen(req, timeout=25) as response:
+                result = json.loads(response.read().decode("utf-8"))
+            if not result.get("ok"):
+                raise RuntimeError(f"Telegram API failed: {method}")
+            return result.get("result")
+        except Exception as exc:
+            last = exc
+            if attempt < 2:
+                time.sleep(2 ** attempt)
+    raise RuntimeError(f"Telegram {method} failed after retries: {last}")
 
 
 def recover_chat_id(value):
@@ -101,10 +109,11 @@ def main():
     if not BOT_TOKEN:
         raise RuntimeError("TELEGRAM_BOT_TOKEN missing")
 
-    bot = telegram("getMe") or {}
-    username = bot.get("username")
-    if username:
-        print(f"[POWER] Connected bot: @{username}")
+    if args.test:
+        bot = telegram("getMe") or {}
+        username = bot.get("username")
+        if username:
+            print(f"[POWER] Connected bot: @{username}")
 
     chat_id = CHAT_ID or load_saved_chat_id() or detect_private_chat()
     if not chat_id:
