@@ -54,6 +54,90 @@ def coverage(snapshot, now=None):
             for name in SECTIONS}
 
 
+def match_collections(snapshot, now=None):
+    """Independent collection alternatives; never implies account access or ROI.
+
+    Use each figure/listing once inside a set. Only fresh, observed records
+    participate; missing input is not treated as an empty account.
+    """
+    inventory = snapshot.get('inventory')
+    listings = snapshot.get('listings')
+    definitions = snapshot.get('collection_definitions', [])
+    if not isinstance(definitions, list):
+        raise ValueError('Koleksiyon tanımları liste olmalı.')
+    if inventory is not None and not isinstance(inventory, list):
+        raise ValueError('Envanter kayıtları liste olmalı.')
+    if listings is not None and not isinstance(listings, list):
+        raise ValueError('İlan kayıtları liste olmalı.')
+
+    def variant(row):
+        key = (row['model'], row['rarity'], row['level'])
+        if (any(not isinstance(x, str) or not x.strip() for x in key[:2])
+                or type(key[2]) is not int or key[2] < 1):
+            raise ValueError('Model/nadirlik metin, seviye pozitif tam sayı olmalı.')
+        return key
+
+    records, seen = [], set()
+    for origin, rows in (('owned', inventory or []), ('listing', listings or [])):
+        for row in rows:
+            if not isinstance(row, dict) or not isinstance(row.get('id'), str) or not row['id']:
+                raise ValueError('Her figür/ilan için kimlik gerekli.')
+            # Same figure may appear in multiple feeds; ambiguous identity is blocked.
+            if row['id'] in seen:
+                raise ValueError('Tekrarlanan figür/ilan kimliği: ' + row['id'])
+            seen.add(row['id'])
+            key = variant(row)
+            if evidence_status(row.get('evidence'), now) != 'fresh':
+                continue
+            if origin == 'owned' and row.get('state') != 'Idle':
+                continue
+            if origin == 'listing' and row.get('state') != 'Listed':
+                continue
+            charges = row.get('claim_charges')
+            if type(charges) is not int or charges <= 0:
+                continue
+            price = number(row['price_nmt']) if origin == 'listing' else Decimal(0)
+            records.append((price, origin, row['id'], key))
+    records.sort(key=lambda x: (x[1] != 'owned', x[0], x[2]))
+    results, definition_ids = [], set()
+    statuses = coverage(snapshot, now)
+    for definition in definitions:
+        if (not isinstance(definition, dict) or not isinstance(definition.get('id'), str)
+                or not definition['id'] or definition['id'] in definition_ids):
+            raise ValueError('Koleksiyon kimlikleri benzersiz olmalı.')
+        definition_ids.add(definition['id'])
+        slots = definition.get('slots')
+        if not isinstance(slots, list) or len(slots) != 4:
+            raise ValueError('Her koleksiyon tam dört varyant gerektirir.')
+        reasons = []
+        for section in ('inventory', 'marketplace', 'collections'):
+            if statuses[section] != 'fresh':
+                reasons.append(section + ': ' + LABELS[statuses[section]])
+        if inventory is None:
+            reasons.append('Envanter listesi sağlanmadı.')
+        if listings is None:
+            reasons.append('İlan listesi sağlanmadı.')
+        if evidence_status(definition.get('evidence'), now) != 'fresh':
+            reasons.append('Koleksiyon gereksinimleri doğrulanmadı.')
+        used, matched, missing, purchase = set(), [], [], Decimal(0)
+        for slot in slots:
+            key = variant(slot)
+            match = next((r for r in records if r[3] == key and r[2] not in used), None)
+            if match is None:
+                missing.append(slot)
+            else:
+                price, origin, rid, _ = match
+                used.add(rid)
+                purchase += price
+                matched.append(dict(id=rid, origin=origin, price_nmt=price))
+        if missing:
+            reasons.append(f'{len(missing)} slot için kullanılabilir güncel kayıt yok.')
+        results.append(dict(id=definition['id'], matched=matched, missing_slots=missing,
+                            quoted_purchase_nmt=purchase if not missing else None,
+                            ready_for_review=not reasons, reasons=reasons))
+    return results
+
+
 def ledger_summary(rows):
     """Legacy user-entered ledger is not independently verified bank activity."""
     totals = {k: Decimal(0) for k in ('income', 'expense', 'capital_in', 'capital_out')}
@@ -182,6 +266,7 @@ def report(snapshot, state, now=None):
         raise ValueError('Aday kimlikleri eksik veya tekrar ediyor.')
     screened = [screen(x, snapshot.get('sources', {}), now) for x in candidates]
     result = {'coverage': coverage(snapshot, now),
+              'collection_matches': match_collections(snapshot, now),
               'ledger': ledger_summary(state.get('ledger', [])), 'candidates': screened,
               'note': 'Senaryo hesabı; kazanç garantisi veya canlı işlem talimatı değildir.'}
     try:
@@ -205,6 +290,16 @@ def render(result):
     if not ledger['complete']:
         lines.append('MUHASEBE EKSİK: yukarıdaki toplamlar yalnızca geçerli satırları içerir.')
     lines += ['', 'Fırsatlar:']
+    for collection in result.get('collection_matches', []):
+        owned = sum(x['origin'] == 'owned' for x in collection['matched'])
+        cost = collection['quoted_purchase_nmt']
+        lines.append(f"Koleksiyon {collection['id']}: elde {owned}/4 parça; "
+                     + (f'ek alış {cost} NMT (diğer masraflar hariç).' if cost is not None
+                        else 'tamamlama maliyeti bilinmiyor.'))
+        if collection['reasons']:
+            lines.append('Bekle: ' + '; '.join(collection['reasons']))
+        else:
+            lines.append('Kayıtlar eşleşti; bu bir kâr veya satın alma önerisi değildir.')
     if not result['candidates']:
         lines.append('Henüz aday verisi yok; bu, piyasada fırsat olmadığı anlamına gelmez.')
     for item in result['candidates']:

@@ -179,5 +179,59 @@ class SourceTests(unittest.TestCase):
             self.assertEqual(sources.check('https://nmt.gg/en/academy/collections')['status'], 'unreadable')
 
 
+class CollectionMatchingTests(unittest.TestCase):
+    def snapshot(self):
+        slot = dict(model='demo', rarity='common', level=1)
+        def row(i, owned):
+            return dict(slot, id=str(i), state='Idle' if owned else 'Listed',
+                        claim_charges=10, price_nmt=str(i), evidence=evidence())
+        return dict(schema_version=1, sources={s: evidence() for s in p.SECTIONS},
+                    inventory=[row(1, True)], listings=[row(i, False) for i in (5, 4, 3, 2)],
+                    collection_definitions=[dict(id='set', slots=[slot.copy() for _ in range(4)],
+                                                 evidence=evidence())])
+
+    def test_repeated_variant_needs_distinct_figures_and_cheapest_listings(self):
+        r = p.match_collections(self.snapshot(), NOW)[0]
+        self.assertTrue(r['ready_for_review'])
+        self.assertEqual([x['id'] for x in r['matched']], ['1', '2', '3', '4'])
+        self.assertEqual(r['quoted_purchase_nmt'], Decimal(9))
+
+    def test_locked_or_exhausted_figure_not_counted(self):
+        s = self.snapshot()
+        s['inventory'][0]['state'] = 'Locked'
+        s['listings'][0]['claim_charges'] = 0
+        r = p.match_collections(s, NOW)[0]
+        self.assertFalse(r['ready_for_review'])
+        self.assertIsNone(r['quoted_purchase_nmt'])
+
+    def test_stale_listings_not_used(self):
+        s = self.snapshot()
+        for row in s['listings']:
+            row['evidence']['observed_at'] = '2026-09-20T12:00:00Z'
+        r = p.match_collections(s, NOW)[0]
+        self.assertEqual(len(r['missing_slots']), 3)
+
+    def test_level_must_match_exactly(self):
+        s = self.snapshot()
+        s['collection_definitions'][0]['slots'][0]['level'] = 2
+        self.assertFalse(p.match_collections(s, NOW)[0]['ready_for_review'])
+
+    def test_duplicate_figure_ids_rejected(self):
+        s = self.snapshot()
+        s['listings'][0]['id'] = '1'
+        with self.assertRaises(ValueError):
+            p.match_collections(s, NOW)
+
+    def test_missing_inventory_reported_not_assumed_empty(self):
+        s = self.snapshot()
+        del s['inventory']
+        self.assertIn('Envanter listesi sağlanmadı.', p.match_collections(s, NOW)[0]['reasons'])
+
+    def test_stale_definition_prevents_ready(self):
+        s = self.snapshot()
+        s['collection_definitions'][0]['evidence']['status'] = 'conflict'
+        self.assertFalse(p.match_collections(s, NOW)[0]['ready_for_review'])
+
+
 if __name__ == '__main__':
     unittest.main()

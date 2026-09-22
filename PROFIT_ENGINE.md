@@ -27,6 +27,30 @@ bu sürüm otomatik olarak tahmin etmez.
 
 ## Veri sözleşmesi
 
+### Envanterden koleksiyon eşleştirme
+
+Mevcut snapshot içine `inventory`, `listings`, `collection_definitions` listeleri
+eklenebilir. Bu, NMT'nin resmî dışa aktarma formatı değildir; HPE'nin kullanıcı
+tarafından sağlanan veri formatıdır. Hesap bağlantısı oluşturmaz.
+
+Envanter satırı: `id`, `model`, `rarity`, `level` (pozitif tam sayı), `state`
+(`Idle`), `claim_charges` (pozitif tam sayı), `evidence`.
+İlan satırı aynı alanlarla `state: Listed` ve ayrıca `price_nmt` içerir.
+Kimlikler tüm satırlarda benzersiz olmalı; aynı figür iki kaynakta görünüyorsa
+önce kimlik çakışması çözülmelidir. Kayıtların evidence alanı aşağıdaki sözleşmeyi kullanır.
+
+Koleksiyon tanımı: benzersiz `id`, `evidence` ve dört elemanlı `slots` listesi.
+Her slot `model`, `rarity`, `level` içerir. Karşılaştırma tam eşleşmedir.
+HPE mevcut kullanılabilir figürleri önce seçer, sonra en ucuz güncel ilanları
+eşleştirir. Tek figürü aynı koleksiyonun iki slotunda kullanmaz. Sıfır hakkı
+olan, eski, doğrulanmamış veya yanlış durumdaki kayıtlar eşleşmez.
+
+Koleksiyonlar bağımsız alternatiflerdir; farklı koleksiyon sonuçlarında aynı
+figür görünebilir. Birlikte satın alma planı sayılmazlar. Raporlanan maliyet
+yalnızca ek alış fiyatlarının toplamıdır; komisyon, mevcut figürün fırsat
+maliyeti ve günlük ödül dikkate alınmadan kâr önerisi yapılmaz. Kaynak
+eksikliği raporlanır; kullanıcının envanteri boş varsayılmaz.
+
 Üst alanlar: `schema_version: 1`, `budget_nmt`, `sources`, `candidates`.
 
 Kaynak bölümleri: inventory, marketplace, collections, power_blocks, merge,
