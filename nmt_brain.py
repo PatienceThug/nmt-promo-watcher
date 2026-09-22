@@ -382,6 +382,10 @@ def handle(state, uid, text):
 
 def main():
     state = load_state()
+    bootstrap_changed = False
+    if not state.get("power", {}).get("next_at"):
+        set_power_due(state)
+        bootstrap_changed = True
     chat_id = CHAT_ID or saved_chat_id()
     if not chat_id:
         raise RuntimeError("Telegram private chat ID not available")
@@ -399,7 +403,7 @@ def main():
         send(chat_id, "🧠 NMT Brain v1 aktif.\n\nMuhasebe + Power Blocks EV + Collection + Lucky Buy risk hesapları hazır. Akıllı Power Blocks sayacı da başladı. Eski mesajlar işlenmedi. /help yaz.")
         print("[BRAIN] initialized")
         return
-    changed, replies = False, 0
+    changed, replies = bootstrap_changed, 0
     for u in batch:
         uid = int(u["update_id"])
         state["last_update_id"] = max(int(state.get("last_update_id", 0)), uid)
