@@ -51,8 +51,11 @@ def tg(method, payload=None, params=None):
     raise RuntimeError(f"Telegram {method} failed after retries: {last}")
 
 
-def send(chat_id, text):
-    tg("sendMessage", {"chat_id": chat_id, "text": text, "disable_web_page_preview": True})
+def send(chat_id, text, buttons=None):
+    payload = {"chat_id": chat_id, "text": text, "disable_web_page_preview": True}
+    if buttons:
+        payload["reply_markup"] = {"inline_keyboard": buttons}
+    tg("sendMessage", payload)
 
 
 def recover_chat_id(enc):
@@ -78,7 +81,8 @@ def saved_chat_id():
 def load_state():
     default = {
         "version": 1, "initialized": False, "last_update_id": 0, "ledger": [],
-        "settings": {"daily_outflow_limit_nmt": "0", "manual_usd_per_nmt": "0"}
+        "settings": {"daily_outflow_limit_nmt": "0", "manual_usd_per_nmt": "0"},
+        "power": {"enabled": True, "interval_minutes": 10, "next_at": "", "last_sent_at": "", "last_placed_at": ""}
     }
     try:
         data = json.loads(STATE_PATH.read_text(encoding="utf-8"))
@@ -89,6 +93,9 @@ def load_state():
     data.setdefault("settings", {})
     for k, v in default["settings"].items():
         data["settings"].setdefault(k, v)
+    data.setdefault("power", {})
+    for k, v in default["power"].items():
+        data["power"].setdefault(k, v)
     return data
 
 
@@ -101,8 +108,74 @@ def get_updates(after):
     return tg("getUpdates", params={
         "offset": int(after) + 1,
         "timeout": 0,
-        "allowed_updates": json.dumps(["message"]),
+        "allowed_updates": json.dumps(["message", "callback_query"]),
     }) or []
+
+
+def utcnow():
+    return datetime.now(timezone.utc)
+
+
+def set_power_due(state, minutes=None):
+    mins = int(minutes if minutes is not None else state["power"].get("interval_minutes", 10))
+    state["power"]["next_at"] = (utcnow() + timedelta(minutes=mins)).isoformat()
+
+
+def power_due(state):
+    if not state.get("power", {}).get("enabled", True):
+        return False
+    raw = state["power"].get("next_at") or ""
+    if not raw:
+        set_power_due(state)
+        return False
+    try:
+        due = datetime.fromisoformat(raw)
+        if due.tzinfo is None:
+            due = due.replace(tzinfo=timezone.utc)
+        return utcnow() >= due.astimezone(timezone.utc)
+    except Exception:
+        set_power_due(state)
+        return False
+
+
+def send_power_reminder(chat_id, state):
+    send(
+        chat_id,
+        "⚡ POWER BLOCKS — KONTROL ZAMANI\n\n"
+        "Yaklaşık 10 dakikalık pencere doldu. Yeni round'u kontrol et; yerleştirdikten sonra "
+        "✅ Yerleştirdim'e basarsan sayaç o ana göre yeniden başlar.",
+        buttons=[
+            [{"text": "⚡ Power Blocks Aç", "url": "https://nmt.gg/power-blocks"}],
+            [
+                {"text": "✅ Yerleştirdim", "callback_data": "pb_placed"},
+                {"text": "⏰ +5 dk", "callback_data": "pb_snooze5"},
+            ],
+            [{"text": "📊 NMT Brain", "callback_data": "brain_status"}],
+        ],
+    )
+    state["power"]["last_sent_at"] = utcnow().isoformat()
+    set_power_due(state)
+
+
+def handle_callback(state, chat_id, query):
+    data = query.get("data") or ""
+    qid = query.get("id") or ""
+    if data == "pb_placed":
+        state["power"]["last_placed_at"] = utcnow().isoformat()
+        set_power_due(state)
+        tg("answerCallbackQuery", {"callback_query_id": qid, "text": "✅ Sayaç 10 dakika için yenilendi."})
+        return True
+    if data == "pb_snooze5":
+        set_power_due(state, 5)
+        tg("answerCallbackQuery", {"callback_query_id": qid, "text": "⏰ 5 dakika erteledim."})
+        return True
+    if data == "brain_status":
+        tg("answerCallbackQuery", {"callback_query_id": qid})
+        send(chat_id, dashboard(state))
+        return True
+    if qid:
+        tg("answerCallbackQuery", {"callback_query_id": qid})
+    return False
 
 
 def add_entry(state, update_id, kind, category, amount, note=""):
@@ -321,8 +394,9 @@ def main():
         if batch:
             state["last_update_id"] = max(int(x["update_id"]) for x in batch)
         state["initialized"] = True
+        set_power_due(state)
         save_state(state)
-        send(chat_id, "🧠 NMT Brain v1 aktif.\n\nMuhasebe + Power Blocks EV + Collection + Lucky Buy risk hesapları hazır. Eski mesajlar işlenmedi. /help yaz.")
+        send(chat_id, "🧠 NMT Brain v1 aktif.\n\nMuhasebe + Power Blocks EV + Collection + Lucky Buy risk hesapları hazır. Akıllı Power Blocks sayacı da başladı. Eski mesajlar işlenmedi. /help yaz.")
         print("[BRAIN] initialized")
         return
     changed, replies = False, 0
@@ -330,6 +404,16 @@ def main():
         uid = int(u["update_id"])
         state["last_update_id"] = max(int(state.get("last_update_id", 0)), uid)
         changed = True
+        query = u.get("callback_query") or {}
+        if query:
+            qchat = ((query.get("message") or {}).get("chat") or {}).get("id", "")
+            if str(qchat) == str(chat_id):
+                try:
+                    if handle_callback(state, chat_id, query):
+                        changed = True
+                except Exception as exc:
+                    print(f"[BRAIN] callback error: {str(exc)[:160]}")
+            continue
         m = u.get("message") or {}
         if str((m.get("chat") or {}).get("id", "")) != str(chat_id):
             continue
@@ -346,6 +430,13 @@ def main():
             send(chat_id, reply)
             replies += 1
             changed = True
+    if power_due(state):
+        try:
+            send_power_reminder(chat_id, state)
+            changed = True
+            print("[BRAIN] smart Power Blocks reminder delivered")
+        except Exception as exc:
+            print(f"[BRAIN] reminder delivery deferred: {str(exc)[:180]}")
     if changed:
         save_state(state)
     print(f"[BRAIN] updates={len(batch)} replies={replies} ledger={len(state['ledger'])}")
