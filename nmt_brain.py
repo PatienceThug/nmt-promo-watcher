@@ -5,6 +5,7 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from zoneinfo import ZoneInfo
 import requests
+import nmt_strategy as strat
 
 BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
 CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
@@ -80,7 +81,8 @@ def saved_chat_id():
 
 def load_state():
     default = {
-        "version": 1, "initialized": False, "last_update_id": 0, "ledger": [], "power_rounds": [],
+        "version": 2, "initialized": False, "last_update_id": 0, "ledger": [], "power_rounds": [],
+        "strategy": {"footprints": [], "profile_updated_at": ""},
         "settings": {"daily_outflow_limit_nmt": "0", "manual_usd_per_nmt": "0"},
         "power": {"enabled": True, "interval_minutes": 10, "next_at": "", "last_sent_at": "", "last_placed_at": ""}
     }
@@ -90,6 +92,9 @@ def load_state():
         data = {}
     for k, v in default.items():
         data.setdefault(k, v)
+    data.setdefault("strategy", {})
+    for k, v in default["strategy"].items():
+        data["strategy"].setdefault(k, v)
     data.setdefault("settings", {})
     for k, v in default["settings"].items():
         data["settings"].setdefault(k, v)
