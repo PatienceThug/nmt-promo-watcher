@@ -64,6 +64,14 @@ class StrategyTests(unittest.TestCase):
         self.assertEqual(r["rounds"], 0)
         self.assertEqual(r["mid_ev_nmt"], Decimal("0"))
 
+    def test_round_diagnostics_zero_run(self):
+        d = s.diagnose_rounds([0] * 72, 5)
+        self.assertEqual(d["rounds"], 72)
+        self.assertEqual(d["actual_hits"], Decimal("0"))
+        self.assertEqual(d["trailing_zero_rounds"], 72)
+        self.assertLess(d["trailing_zero_probability_mid"], Decimal("0.01"))
+        self.assertLess(d["approx_z"], -2)
+
 
 if __name__ == "__main__":
     unittest.main()
