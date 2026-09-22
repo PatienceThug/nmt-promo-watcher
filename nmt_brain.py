@@ -32,12 +32,23 @@ def tg(method, payload=None, params=None):
     if not BOT_TOKEN:
         raise RuntimeError("TELEGRAM_BOT_TOKEN missing")
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/{method}"
-    r = requests.post(url, json=payload, timeout=20) if payload is not None else requests.get(url, params=params, timeout=20)
-    r.raise_for_status()
-    data = r.json()
-    if not data.get("ok"):
-        raise RuntimeError(f"Telegram API failed: {method}")
-    return data.get("result")
+    last = None
+    for attempt in range(3):
+        try:
+            if payload is not None:
+                r = requests.post(url, json=payload, timeout=(10, 20))
+            else:
+                r = requests.get(url, params=params, timeout=(10, 20))
+            r.raise_for_status()
+            data = r.json()
+            if not data.get("ok"):
+                raise RuntimeError(f"Telegram API failed: {method}")
+            return data.get("result")
+        except (requests.RequestException, RuntimeError) as exc:
+            last = exc
+            if attempt < 2:
+                time.sleep(2 ** attempt)
+    raise RuntimeError(f"Telegram {method} failed after retries: {last}")
 
 
 def send(chat_id, text):
@@ -301,7 +312,11 @@ def main():
     chat_id = CHAT_ID or saved_chat_id()
     if not chat_id:
         raise RuntimeError("Telegram private chat ID not available")
-    batch = get_updates(state.get("last_update_id", 0))
+    try:
+        batch = get_updates(state.get("last_update_id", 0))
+    except Exception as exc:
+        print(f"[BRAIN] Telegram temporarily unavailable: {str(exc)[:180]}")
+        return
     if not state.get("initialized"):
         if batch:
             state["last_update_id"] = max(int(x["update_id"]) for x in batch)
