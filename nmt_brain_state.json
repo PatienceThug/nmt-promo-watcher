@@ -8,23 +8,23 @@
       "at": "2026-09-22T12:10:50.230498+00:00",
       "kind": "income",
       "category": "power_blocks",
-      "amount_nmt": "60",
-      "note": "Telegram hızlı sonuç"
+      "amount_nmt": "0",
+      "note": "Kullanıcı düzeltmesi: ödül alınmadı (22 Eylül 2026)"
     },
     {
       "id": "tg-cb-324477641443968109",
       "at": "2026-09-22T12:10:51.161624+00:00",
       "kind": "income",
       "category": "power_blocks",
-      "amount_nmt": "60",
-      "note": "Telegram hızlı sonuç"
+      "amount_nmt": "0",
+      "note": "Kullanıcı düzeltmesi: ödül alınmadı (22 Eylül 2026)"
     }
   ],
   "settings": {
     "daily_outflow_limit_nmt": 0,
     "manual_usd_per_nmt": 0
   },
-  "updated_at": "2026-09-22T12:12:28.494168+00:00",
+  "updated_at": "2026-09-22T12:16:36.145719+00:00",
   "power": {
     "enabled": true,
     "interval_minutes": 10,
@@ -155,16 +155,16 @@
     {
       "id": "cb-324477642062259493",
       "at": "2026-09-22T12:10:50.230477+00:00",
-      "reward_nmt": "60",
+      "reward_nmt": "0",
       "power_spent": "5",
-      "note": "Telegram hızlı sonuç"
+      "note": "Kullanıcı düzeltmesi: ödül alınmadı (22 Eylül 2026)"
     },
     {
       "id": "cb-324477641443968109",
       "at": "2026-09-22T12:10:51.161601+00:00",
-      "reward_nmt": "60",
+      "reward_nmt": "0",
       "power_spent": "5",
-      "note": "Telegram hızlı sonuç"
+      "note": "Kullanıcı düzeltmesi: ödül alınmadı (22 Eylül 2026)"
     },
     {
       "id": "cb-324477643932632539",
@@ -172,6 +172,20 @@
       "reward_nmt": "0",
       "power_spent": "5",
       "note": "Telegram hızlı sonuç"
+    },
+    {
+      "id": "user-correction-20260922-round-21",
+      "at": "2026-09-22T12:14:47+00:00",
+      "reward_nmt": "0",
+      "power_spent": "5",
+      "note": "Kullanıcı beyanı: toplam 22 round, 0 NMT"
+    },
+    {
+      "id": "user-correction-20260922-round-22",
+      "at": "2026-09-22T12:14:47+00:00",
+      "reward_nmt": "0",
+      "power_spent": "5",
+      "note": "Kullanıcı beyanı: toplam 22 round, 0 NMT"
     }
   ],
   "strategy": {
