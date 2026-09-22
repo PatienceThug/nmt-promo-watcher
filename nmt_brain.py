@@ -80,7 +80,7 @@ def saved_chat_id():
 
 def load_state():
     default = {
-        "version": 1, "initialized": False, "last_update_id": 0, "ledger": [],
+        "version": 1, "initialized": False, "last_update_id": 0, "ledger": [], "power_rounds": [],
         "settings": {"daily_outflow_limit_nmt": "0", "manual_usd_per_nmt": "0"},
         "power": {"enabled": True, "interval_minutes": 10, "next_at": "", "last_sent_at": "", "last_placed_at": ""}
     }
@@ -229,6 +229,16 @@ def dashboard(state):
         f"7 gün: +{show(wi)} / -{show(wo)} = {show(wn)} NMT",
         f"Tüm kayıtlar net nakit akışı: {show(an)} NMT",
     ]
+    rounds = state.get("power_rounds", [])
+    if rounds:
+        recent = rounds[-20:]
+        total_reward = sum((num(x.get("reward_nmt", "0")) for x in recent), Decimal("0"))
+        total_power = sum((num(x.get("power_spent", "0")) for x in recent), Decimal("0"))
+        efficiency = total_reward / total_power if total_power > 0 else Decimal("0")
+        lines.append(f"PB son {len(recent)} round: {show(total_reward)} NMT / {show(total_power)} Power = {show(efficiency)} NMT/Power")
+        if len(recent) < 30:
+            lines.append("PB örneklem: henüz küçük; edge sonucu çıkarma.")
+
     if limit > 0:
         lines.append(f"Günlük gider limiti: {show(to)}/{show(limit)} NMT · kalan {show(max(Decimal('0'), limit-to))}")
     if rate > 0:
@@ -242,6 +252,7 @@ def help_text():
         "🧠 NMT BRAIN KOMUTLARI\n\n"
         "/nmt — durum\n"
         "/pb 120 — Power Blocks geliri\n"
+        "/round 120 25 — round ödülü + harcanan Power kaydı\n"
         "/col 80 — Collection geliri\n"
         "/sell 2200 Ducko — satış geliri\n"
         "/buy 1500 Ducko — marketplace alımı\n"
@@ -333,6 +344,28 @@ def handle(state, uid, text):
         return dashboard(state)
     if cmd in ("/help", "/yardim", "/yardım"):
         return help_text()
+    if cmd == "/round":
+        if len(args) < 2:
+            return "Kullanım: /round <ödül_NMT> <harcanan_Power> [not]"
+        reward, spent = num(args[0]), num(args[1])
+        if reward < 0 or spent <= 0:
+            return "Ödül 0 veya üstü; Power 0'dan büyük olmalı."
+        rid = f"tg-{uid}"
+        if not any(x.get("id") == rid for x in state.get("power_rounds", [])):
+            state.setdefault("power_rounds", []).append({
+                "id": rid,
+                "at": utcnow().isoformat(),
+                "reward_nmt": str(reward),
+                "power_spent": str(spent),
+                "note": " ".join(args[2:])[:160],
+            })
+            if reward > 0:
+                add_entry(state, uid, "income", "power_blocks", reward, " ".join(args[2:]))
+        efficiency = reward / spent
+        return (
+            f"✅ Round kaydedildi: {show(reward)} NMT / {show(spent)} Power = "
+            f"{show(efficiency)} NMT/Power. Toplam round verisi büyüdükçe Brain bunu karşılaştıracak."
+        )
     specs = {
         "/pb": ("income", "power_blocks", "⚡ Power Blocks"),
         "/col": ("income", "collections", "🧩 Collection"),
