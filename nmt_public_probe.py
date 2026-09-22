@@ -11,6 +11,8 @@ import requests
 
 URLS = [
     "https://nmt.gg/en/explorer",
+    "https://nmt.gg/ru/explorer?q=%7Bsearch_term_string%7D",
+    "https://nmt.gg/en",
     "https://nmt.gg/power-blocks",
 ]
 UA = {"User-Agent": "Mozilla/5.0 (NMT-Brain-ReadOnly/1.0)"}
