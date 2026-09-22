@@ -1,13 +1,13 @@
 {
   "version": 2,
   "initialized": true,
-  "last_update_id": 25227338,
+  "last_update_id": 25227339,
   "ledger": [],
   "settings": {
     "daily_outflow_limit_nmt": 0,
     "manual_usd_per_nmt": 0
   },
-  "updated_at": "2026-09-22T11:55:53.590688+00:00",
+  "updated_at": "2026-09-22T11:56:21.411237+00:00",
   "power": {
     "enabled": true,
     "interval_minutes": 10,
@@ -68,6 +68,13 @@
     {
       "id": "cb-324477643418289127",
       "at": "2026-09-22T11:55:48.676638+00:00",
+      "reward_nmt": "0",
+      "power_spent": "5",
+      "note": "Telegram hızlı sonuç"
+    },
+    {
+      "id": "cb-324477643347712586",
+      "at": "2026-09-22T11:56:16.525254+00:00",
       "reward_nmt": "0",
       "power_spent": "5",
       "note": "Telegram hızlı sonuç"
