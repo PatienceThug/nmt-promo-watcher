@@ -8,7 +8,7 @@ from pathlib import Path
 import requests
 from merge_state import merge
 
-FILES = ('seen_codes.json', 'youtube_state.json', 'telegram_state.json')
+FILES = ('seen_codes.json', 'youtube_state.json', 'telegram_state.json', 'nmt_brain_state.json')
 
 
 def persist_files(incoming, request=None, sleep=time.sleep):
