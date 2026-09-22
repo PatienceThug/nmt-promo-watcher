@@ -1,7 +1,7 @@
 {
   "version": 2,
   "initialized": true,
-  "last_update_id": 25227356,
+  "last_update_id": 25227365,
   "ledger": [
     {
       "id": "tg-cb-324477642062259493",
@@ -24,12 +24,12 @@
     "daily_outflow_limit_nmt": 0,
     "manual_usd_per_nmt": 0
   },
-  "updated_at": "2026-09-22T15:10:38.612497+00:00",
+  "updated_at": "2026-09-22T15:12:18.018436+00:00",
   "power": {
     "enabled": true,
     "interval_minutes": 10,
-    "next_at": "2026-09-22T15:11:27.191125+00:00",
-    "last_sent_at": "2026-09-22T15:01:27.191105+00:00",
+    "next_at": "2026-09-22T15:22:18.018410+00:00",
+    "last_sent_at": "2026-09-22T15:12:18.018393+00:00",
     "last_placed_at": "2026-09-22T11:57:28.834479+00:00"
   },
   "power_rounds": [
@@ -204,6 +204,69 @@
     {
       "id": "cb-324477642613290700",
       "at": "2026-09-22T15:10:37.585193+00:00",
+      "reward_nmt": "0",
+      "power_spent": "5",
+      "note": "Telegram hızlı sonuç"
+    },
+    {
+      "id": "cb-324477642484676837",
+      "at": "2026-09-22T15:11:33.548839+00:00",
+      "reward_nmt": "0",
+      "power_spent": "5",
+      "note": "Telegram hızlı sonuç"
+    },
+    {
+      "id": "cb-324477643372297077",
+      "at": "2026-09-22T15:11:38.403784+00:00",
+      "reward_nmt": "0",
+      "power_spent": "5",
+      "note": "Telegram hızlı sonuç"
+    },
+    {
+      "id": "cb-324477642234973087",
+      "at": "2026-09-22T15:11:43.439157+00:00",
+      "reward_nmt": "0",
+      "power_spent": "5",
+      "note": "Telegram hızlı sonuç"
+    },
+    {
+      "id": "cb-324477644515566870",
+      "at": "2026-09-22T15:11:48.339319+00:00",
+      "reward_nmt": "0",
+      "power_spent": "5",
+      "note": "Telegram hızlı sonuç"
+    },
+    {
+      "id": "cb-324477643277564630",
+      "at": "2026-09-22T15:11:53.246824+00:00",
+      "reward_nmt": "0",
+      "power_spent": "5",
+      "note": "Telegram hızlı sonuç"
+    },
+    {
+      "id": "cb-324477643285086653",
+      "at": "2026-09-22T15:11:58.000686+00:00",
+      "reward_nmt": "0",
+      "power_spent": "5",
+      "note": "Telegram hızlı sonuç"
+    },
+    {
+      "id": "cb-324477641835872787",
+      "at": "2026-09-22T15:12:02.869304+00:00",
+      "reward_nmt": "0",
+      "power_spent": "5",
+      "note": "Telegram hızlı sonuç"
+    },
+    {
+      "id": "cb-324477642578082917",
+      "at": "2026-09-22T15:12:07.706063+00:00",
+      "reward_nmt": "0",
+      "power_spent": "5",
+      "note": "Telegram hızlı sonuç"
+    },
+    {
+      "id": "cb-324477644758781965",
+      "at": "2026-09-22T15:12:12.557514+00:00",
       "reward_nmt": "0",
       "power_spent": "5",
       "note": "Telegram hızlı sonuç"
