@@ -351,6 +351,49 @@ def send_brain_menu(chat_id, state):
     )
 
 
+def record_round_result(state, event_id, reward, spent, note=""):
+    reward = num(reward)
+    spent = num(spent)
+    if reward < 0 or spent <= 0:
+        raise ValueError("Round değerleri geçersiz.")
+    rid = str(event_id)
+    if any(str(x.get("id")) == rid for x in state.get("power_rounds", [])):
+        return False
+    state.setdefault("power_rounds", []).append({
+        "id": rid,
+        "at": utcnow().isoformat(),
+        "reward_nmt": str(reward),
+        "power_spent": str(spent),
+        "note": note[:160],
+    })
+    if reward > 0:
+        add_entry(state, rid, "income", "power_blocks", reward, note)
+    return True
+
+
+def round_summary_text(state):
+    rows = state.get("power_rounds", [])
+    if not rows:
+        return "Henüz kayıtlı Power Blocks round'u yok."
+    recent = rows[-100:]
+    rewards = [num(x.get("reward_nmt", "0")) for x in recent]
+    powers = [num(x.get("power_spent", "0")) for x in recent]
+    total_reward = sum(rewards, Decimal("0"))
+    total_power = sum(powers, Decimal("0"))
+    zero_count = sum(1 for x in rewards if x == 0)
+    eff = total_reward / total_power if total_power > 0 else Decimal("0")
+    grade = strat.evidence_grade(len(recent))
+    return (
+        f"📈 PB GERÇEK VERİN\n\n"
+        f"Round: {len(recent)} ({grade})\n"
+        f"Sıfır ödül: {zero_count}\n"
+        f"Toplam ödül: {show(total_reward)} NMT\n"
+        f"Harcanan Power: {show(total_power)}\n"
+        f"Gerçek verim: {show(eff)} NMT/Power\n\n"
+        "30 round altındayken sonuçları strateji kanıtı sayma."
+    )
+
+
 def handle_callback(state, chat_id, query):
     data = query.get("data") or ""
     qid = query.get("id") or ""
@@ -358,14 +401,54 @@ def handle_callback(state, chat_id, query):
         state["power"]["last_placed_at"] = utcnow().isoformat()
         set_power_due(state)
         safe_answer_callback(qid, "✅ Sayaç 10 dakika için yenilendi.")
+        if not strategy_areas(state):
+            send(chat_id, "🎯 Bir kere /pbset ile footprint'lerini girersen bundan sonra kazanç matematiğini otomatik tutacağım.")
         return True
     if data == "pb_snooze5":
         set_power_due(state, 5)
         safe_answer_callback(qid, "⏰ 5 dakika erteledim.")
         return True
+    if data.startswith("pb_reward_"):
+        raw = data.removeprefix("pb_reward_")
+        if raw == "other":
+            safe_answer_callback(qid)
+            send(chat_id, "✍️ Diğer ödül için: /round <NMT> <harcanan_Power>\nÖrnek: /round 120 5")
+            return True
+        areas = strategy_areas(state)
+        if not areas:
+            safe_answer_callback(qid)
+            send(chat_id, "Önce /pbset ile footprint profilini ayarla. Örnek: /pbset 1 1 1 1 1")
+            return True
+        reward = num(raw)
+        spent = sum(areas)
+        added = record_round_result(state, "cb-" + qid, reward, spent, "Telegram hızlı sonuç")
+        safe_answer_callback(qid, "✅ Round kaydedildi." if added else "Bu round zaten kayıtlı.")
+        send(chat_id, round_summary_text(state))
+        return True
     if data == "brain_menu":
         safe_answer_callback(qid)
         send_brain_menu(chat_id, state)
+        return True
+    if data == "brain_profile":
+        safe_answer_callback(qid)
+        send(chat_id, strategy_profile_text(state))
+        return True
+    if data == "brain_streak72":
+        safe_answer_callback(qid)
+        send(chat_id, streak_text(state, 72))
+        return True
+    if data == "brain_tools":
+        safe_answer_callback(qid)
+        send(
+            chat_id,
+            "🛠 KAZANÇ ARAÇLARI\n\n"
+            "/upgrade <ek_kare> <maliyet_NMT>\n"
+            "/flip <alış> <hedef_satış>\n"
+            "/mergecalc <fig1_değer> <fig2_değer> <üst_level_değer>\n"
+            "/collectionroi <tamamlama_maliyeti> <günlük_NMT>\n"
+            "/target <USD_hedef> <saat>\n\n"
+            "Bunlar işlem yapmaz; kötü yatırımı daha para harcamadan elemek için hesap yapar."
+        )
         return True
     if data == "brain_status":
         safe_answer_callback(qid)
@@ -393,7 +476,6 @@ def handle_callback(state, chat_id, query):
         return True
     safe_answer_callback(qid)
     return False
-
 
 def add_entry(state, update_id, kind, category, amount, note=""):
     amount = num(amount)
