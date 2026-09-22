@@ -1,13 +1,13 @@
 {
   "version": 2,
   "initialized": true,
-  "last_update_id": 25227322,
+  "last_update_id": 25227323,
   "ledger": [],
   "settings": {
     "daily_outflow_limit_nmt": 0,
     "manual_usd_per_nmt": 0
   },
-  "updated_at": "2026-09-22T10:29:13.338385+00:00",
+  "updated_at": "2026-09-22T10:29:41.223182+00:00",
   "power": {
     "enabled": true,
     "interval_minutes": 10,
