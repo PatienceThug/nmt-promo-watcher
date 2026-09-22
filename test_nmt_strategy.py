@@ -49,6 +49,21 @@ class StrategyTests(unittest.TestCase):
         self.assertGreater(p, 0)
         self.assertLess(p, Decimal("0.01"))
 
+    def test_market_break_even_resale(self):
+        self.assertEqual(s.market_break_even_resale(1000), Decimal("1111.111111111111111111111111"))
+
+    def test_nft_power_band_screen(self):
+        r = s.nft_pb_screen(5000, 7000, "5x5")
+        self.assertEqual(r["area"], 25)
+        self.assertEqual(r["rounds"], 57)
+        self.assertGreater(r["band_gross_ev_nmt"], Decimal("300"))
+        self.assertLess(r["price_recovery_ratio"], Decimal("0.1"))
+
+    def test_band_below_threshold(self):
+        r = s.footprint_band_runway(5599, "5x5")
+        self.assertEqual(r["rounds"], 0)
+        self.assertEqual(r["mid_ev_nmt"], Decimal("0"))
+
 
 if __name__ == "__main__":
     unittest.main()
