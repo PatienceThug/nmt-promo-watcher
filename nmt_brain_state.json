@@ -1,7 +1,7 @@
 {
   "version": 2,
   "initialized": true,
-  "last_update_id": 25227353,
+  "last_update_id": 25227356,
   "ledger": [
     {
       "id": "tg-cb-324477642062259493",
@@ -24,7 +24,7 @@
     "daily_outflow_limit_nmt": 0,
     "manual_usd_per_nmt": 0
   },
-  "updated_at": "2026-09-22T15:01:27.191164+00:00",
+  "updated_at": "2026-09-22T15:10:38.612497+00:00",
   "power": {
     "enabled": true,
     "interval_minutes": 10,
@@ -186,6 +186,27 @@
       "reward_nmt": "0",
       "power_spent": "5",
       "note": "Kullanıcı beyanı: toplam 22 round, 0 NMT"
+    },
+    {
+      "id": "cb-324477641714670942",
+      "at": "2026-09-22T15:10:31.480104+00:00",
+      "reward_nmt": "0",
+      "power_spent": "5",
+      "note": "Telegram hızlı sonuç"
+    },
+    {
+      "id": "cb-324477643175629184",
+      "at": "2026-09-22T15:10:36.532008+00:00",
+      "reward_nmt": "0",
+      "power_spent": "5",
+      "note": "Telegram hızlı sonuç"
+    },
+    {
+      "id": "cb-324477642613290700",
+      "at": "2026-09-22T15:10:37.585193+00:00",
+      "reward_nmt": "0",
+      "power_spent": "5",
+      "note": "Telegram hızlı sonuç"
     }
   ],
   "strategy": {
