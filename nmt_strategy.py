@@ -6,6 +6,7 @@ NMT and never sends gameplay actions.
 from __future__ import annotations
 
 import json
+import math
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
@@ -235,3 +236,36 @@ def nft_pb_screen(price_nmt, current_power, footprint: str) -> dict:
     recovery = gross / price if price > 0 else Decimal("0")
     r.update({"price_nmt": price, "band_gross_ev_nmt": gross, "price_recovery_ratio": recovery})
     return r
+
+
+def diagnose_rounds(rewards, area: int, winning_cells=WIN_MID) -> dict:
+    vals = [D(x) for x in rewards]
+    area = int(area)
+    if area <= 0:
+        raise ValueError("Alan pozitif olmalı.")
+    rounds = len(vals)
+    hits = sum((v / PAY for v in vals), Decimal("0"))
+    expected = D(rounds) * expected_hits(area, winning_cells)
+    p_cell = D(winning_cells) / D(BOARD)
+    trials = rounds * area
+    variance = float(D(trials) * p_cell * (Decimal("1") - p_cell)) if trials else 0.0
+    std = math.sqrt(max(variance, 0.0))
+    z = (float(hits - expected) / std) if std > 0 else 0.0
+    trailing_zero = 0
+    for value in reversed(vals):
+        if value == 0:
+            trailing_zero += 1
+        else:
+            break
+    non_multiple = [v for v in vals if (v % PAY) != 0]
+    return {
+        "rounds": rounds,
+        "area": area,
+        "actual_hits": hits,
+        "expected_hits": expected,
+        "approx_z": z,
+        "trailing_zero_rounds": trailing_zero,
+        "trailing_zero_probability_mid": zero_streak_probability(area, trailing_zero, winning_cells),
+        "non_15_multiple_rewards": len(non_multiple),
+        "grade": evidence_grade(rounds),
+    }
