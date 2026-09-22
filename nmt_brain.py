@@ -452,6 +452,10 @@ def send_brain_menu(chat_id, state):
                 {"text": "⚡ EV 25", "callback_data": "brain_ev25"},
             ],
             [
+                {"text": "🧠 Kazanç Planı", "callback_data": "brain_plan"},
+                {"text": "📈 Roundlar", "callback_data": "brain_rounds"},
+            ],
+            [
                 {"text": "🛒 Kazanç Araçları", "callback_data": "brain_tools"},
                 {"text": "📒 Komutlar", "callback_data": "brain_help"},
             ],
@@ -549,11 +553,21 @@ def handle_callback(state, chat_id, query):
         safe_answer_callback(qid)
         send(chat_id, streak_text(state, 72))
         return True
+    if data == "brain_plan":
+        safe_answer_callback(qid)
+        send(chat_id, plan_text(state))
+        return True
+    if data == "brain_rounds":
+        safe_answer_callback(qid)
+        send(chat_id, round_summary_text(state))
+        return True
     if data == "brain_tools":
         safe_answer_callback(qid)
         send(
             chat_id,
             "🛠 KAZANÇ ARAÇLARI\n\n"
+            "/nftcheck <fiyat_NMT> <Power> <footprint>\n"
+            "/marketmin <alış_NMT>\n"
             "/upgrade <ek_kare> <maliyet_NMT>\n"
             "/flip <alış> <hedef_satış>\n"
             "/mergecalc <fig1_değer> <fig2_değer> <üst_level_değer>\n"
@@ -667,9 +681,13 @@ def help_text():
         "/streak 72 — 72 round sıfır ödül olasılığını hesapla\n"
         "/target 21 12 — 12 saatte 21 USD için gereken alanı hesapla\n"
         "/upgrade 20 1000 — +20 kare için 1000 NMT maliyetin kaba geri dönüşü\n"
+        "/nftcheck 5000 7000 5x5 — NFT fiyat/Power/footprint yatırım filtresi\n"
+        "/marketmin 1000 — %10 fee sonrası minimum zarar etmeme satış fiyatı\n"
         "/flip 1000 1500 — marketplace alış/satış sonrası %10 fee hesabı\n"
         "/mergecalc 400 400 1200 — iki figürü merge edip satma hesabı\n"
-        "/collectionroi 5000 100 — collection maliyeti/günlük NMT başabaş\n\n"
+        "/collectionroi 5000 100 — collection maliyeti/günlük NMT başabaş\n"
+        "/plan — mevcut profil için veri-temelli kazanç planı\n"
+        "/health — bot sağlık/state özeti\n\n"
         "⚡ POWER BLOCKS / KAYIT\n"
         "/nmt — durum\n"
         "/round 120 25 — round ödülü + harcanan Power kaydı\n"
@@ -797,6 +815,22 @@ def handle(state, uid, text):
             return "Kullanım: /upgrade <ek_kare> <maliyet_NMT>. Örnek: /upgrade 20 1000"
         extra = strat.parse_footprint(args[0])
         return upgrade_text(state, extra, args[1])
+
+    if cmd == "/nftcheck":
+        if len(args) < 3:
+            return "Kullanım: /nftcheck <fiyat_NMT> <Power> <footprint>. Örnek: /nftcheck 5000 7000 5x5"
+        return nft_check_text(args[0], args[1], args[2])
+
+    if cmd == "/marketmin":
+        if not args:
+            return "Kullanım: /marketmin <alış_NMT>"
+        return market_min_text(args[0])
+
+    if cmd == "/plan":
+        return plan_text(state)
+
+    if cmd == "/health":
+        return health_text(state)
 
     if cmd == "/flip":
         if len(args) < 2:
