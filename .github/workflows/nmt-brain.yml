@@ -15,8 +15,8 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
-      - run: pip install requests==2.32.5
+      - run: pip install requests==2.32.5 beautifulsoup4==4.13.5
       - name: Verify only — no Telegram, no worker
         run: |
           python -m py_compile nmt_brain.py nmt_strategy.py persist_state.py audit_project.py
-          python -m unittest -v test_nmt_brain.py test_nmt_strategy.py test_persist_state.py
+          python -m unittest -v test_nmt_brain.py test_nmt_strategy.py test_persist_state.py test_nmt_profit.py

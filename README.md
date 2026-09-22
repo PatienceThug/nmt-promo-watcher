@@ -1,5 +1,28 @@
 # NMT Promo Watcher
 
+## Güncel çalışma durumu: sessiz
+
+Otomatik mesajlar ve zamanlanmış işler kapalıdır. Aşağıdaki eski tarama açıklamaları
+kodun yeteneklerini anlatır; şu anda çalışan bir bildirim servisi anlamına gelmez.
+
+## Kazanç araştırma motoru — ilk aşama
+
+Yeni sürüm `nmt_profit.py` ile veri güncelliği, nakit akışı, masraflı/stresli
+fırsat senaryoları ve bütçeye uygun figür çakışması kontrolü sağlar.
+`nmt_sources.py` resmî akademideki on rehberi elle başlatılan bir kontrolle izler.
+Oyun hesabına giriş yapmaz, emir vermez, zamanlayıcı veya Telegram mesajı başlatmaz.
+
+```bash
+python nmt_profit.py
+python nmt_profit.py --snapshot examples/opportunities.json --json
+python nmt_sources.py --guide collections --guide power-blocks
+python -m unittest -v test_nmt_profit.py test_nmt_brain.py test_nmt_strategy.py test_persist_state.py
+```
+
+Brain komutları: `/opportunities`, `/coverage`, `/ledger`. Worker kapalı olduğu
+için Telegram'dan cevap vermez; yerel rapor kullanılabilir.
+Kurulum, veri şeması, hesap sınırları ve sıradaki işler: [PROFIT_ENGINE.md](PROFIT_ENGINE.md).
+
 NMT.GG promo kodlarını takip eden otomatik tarayıcı.
 
 - GitHub Actions zamanlaması `*/5 * * * *`: hedef her 5 dakikada bir taramadır. GitHub gecikmeleri nedeniyle kesin 5 dakika garantisi yoktur.

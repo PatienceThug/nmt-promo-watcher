@@ -6,6 +6,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 import requests
 import nmt_strategy as strat
+import nmt_profit as profit
 
 BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
 CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
@@ -18,7 +19,10 @@ HIT_PAY = Decimal("15")
 
 def num(v):
     try:
-        return Decimal(str(v))
+        value = Decimal(str(v))
+        if not value.is_finite():
+            raise ValueError("Sayı sonlu olmalı.")
+        return value
     except (InvalidOperation, ValueError):
         raise ValueError("Geçerli bir sayı gir.")
 
@@ -758,6 +762,9 @@ def help_text():
     return (
         "🧠 NMT BRAIN KOMUTLARI\n\n"
         "🎯 STRATEJİ\n"
+        "/opportunities — güncellik kontrollü fırsat ve bütçe raporu\n"
+        "/coverage — kaynakların güncellik ve erişim durumu\n"
+        "/ledger — sermaye ve faaliyet nakit akışını ayrı göster\n"
         "/pbset 1 1 1 1 1 — kullandığın footprint alanlarını kaydet\n"
         "/profile — gerçek PB profilini ve 12 saatlik EV'yi göster\n"
         "/streak 72 — 72 round sıfır ödül olasılığını hesapla\n"
@@ -862,6 +869,9 @@ def handle(state, uid, text):
         return None
     cmd = p[0].split("@", 1)[0].lower()
     args = p[1:]
+
+    if cmd in ("/opportunities", "/coverage", "/ledger"):
+        return profit.render(profit.report(profit.load_snapshot(), state))
 
     if cmd in ("/nmt", "/durum"):
         return dashboard(state)

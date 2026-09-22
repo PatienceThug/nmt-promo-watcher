@@ -24,7 +24,10 @@ MARKET_FEE = Decimal(str(RULES["marketplace"]["fee_fraction"]))
 
 def D(value) -> Decimal:
     try:
-        return Decimal(str(value))
+        result = Decimal(str(value))
+        if not result.is_finite():
+            raise ValueError("Sayı sonlu olmalı.")
+        return result
     except (InvalidOperation, ValueError):
         raise ValueError("Geçerli bir sayı gir.")
 

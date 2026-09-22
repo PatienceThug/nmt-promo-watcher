@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+.venv/
+nmt_opportunities.json
+nmt_source_checks.json
+profit-report*.json

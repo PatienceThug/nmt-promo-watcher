@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "note": "SENTETİK ŞEMA ÖRNEĞİ — canlı fiyat veya kazanç önerisi değildir.",
+  "budget_nmt": "200",
+  "sources": {},
+  "candidates": [
+    {
+      "id": "DEMO-FLIP",
+      "kind": "flip",
+      "asset_ids": ["DEMO-LISTING-1"],
+      "buy_nmt": "100",
+      "owned_opportunity_cost_nmt": "0",
+      "exit_value_nmt": "200",
+      "exit_basis": "listing",
+      "fee_fraction": "0.10",
+      "other_costs_nmt": "5",
+      "stress_haircut_fraction": "0.20",
+      "target_profit_nmt": "10",
+      "horizon_days": "7",
+      "evidence": {
+        "status": "missing",
+        "source": "synthetic-example",
+        "verification": "unreviewed"
+      }
+    }
+  ]
+}
