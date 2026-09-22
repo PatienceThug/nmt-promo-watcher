@@ -1,0 +1,46 @@
+name: NMT Brain
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "nmt_brain.py"
+      - "nmt_brain_state.json"
+      - "persist_state.py"
+      - ".github/workflows/nmt-brain.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: nmt-brain
+  cancel-in-progress: false
+
+jobs:
+  brain:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: pip install requests==2.32.5
+      - name: Verify NMT Brain
+        run: python -m py_compile nmt_brain.py persist_state.py
+      - name: Process Telegram commands
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          PYTHONUNBUFFERED: "1"
+        run: python nmt_brain.py
+      - name: Persist NMT Brain state
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: python persist_state.py
