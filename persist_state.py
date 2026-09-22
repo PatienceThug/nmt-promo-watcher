@@ -3,6 +3,7 @@ import base64
 import json
 import os
 import time
+import sys
 from pathlib import Path
 
 import requests
@@ -57,7 +58,14 @@ def persist_files(incoming, request=None, sleep=time.sleep):
 
 
 def main():
-    incoming = {name: json.loads(Path(name).read_text()) for name in FILES if Path(name).exists()}
+    requested = tuple(sys.argv[1:]) if len(sys.argv) > 1 else FILES
+    unknown = [name for name in requested if name not in FILES]
+    if unknown:
+        raise SystemExit(f"unsupported state file(s): {', '.join(unknown)}")
+    incoming = {name: json.loads(Path(name).read_text()) for name in requested if Path(name).exists()}
+    if not incoming:
+        print("[STATE] Nothing to persist")
+        return
     persist_files(incoming)
 
 
