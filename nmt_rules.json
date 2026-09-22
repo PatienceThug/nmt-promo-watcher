@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "verified_at": "2026-09-22",
+  "power_blocks": {
+    "board_width": 100,
+    "board_height": 100,
+    "board_cells": 10000,
+    "round_seconds_approx": 600,
+    "winning_cells_min": 100,
+    "winning_cells_mid": 145,
+    "winning_cells_max": 190,
+    "nmt_per_hit": 15,
+    "start_slots": 5,
+    "max_slots": 19,
+    "slot_gain_per_account_level": 1,
+    "power_cost_equals_footprint_area": true,
+    "power_refunded_if_removed_before_settle": true,
+    "power_refunded_after_settle": false,
+    "footprint_examples": {
+      "448": "1x2",
+      "896": "2x2",
+      "5600": "5x5",
+      "22400": "10x10",
+      "50400": "15x15"
+    },
+    "source": "https://nmt.gg/ru/academy/power-blocks"
+  },
+  "merge": {
+    "identical_figures_required": 2,
+    "same_level_required": true,
+    "result": "next_level",
+    "source": "https://tg.me/nmt_official"
+  },
+  "marketplace": {
+    "fee_fraction": 0.10,
+    "source": "https://nmt.gg/en/academy/lucky-buy",
+    "note": "Lucky Buy guide identifies the usual marketplace fee as currently 10%."
+  },
+  "lucky_buy": {
+    "house_edge_fraction": 0.10,
+    "display_chance_min": 0.001,
+    "display_chance_max": 0.90,
+    "min_stake_nmt": 0.05,
+    "source": "https://nmt.gg/en/academy/lucky-buy"
+  },
+  "source_policy": {
+    "mechanics": "official NMT Academy or official NMT Telegram only",
+    "community_claims": "never treated as guaranteed earnings",
+    "automation": "no CAPTCHA bypass, stealth or anti-bot evasion"
+  }
+}
