@@ -332,14 +332,21 @@ def send_brain_menu(chat_id, state):
         brain_menu_text(state),
         buttons=[
             [
+                {"text": "🎯 PB Profil", "callback_data": "brain_profile"},
                 {"text": "📊 Durum", "callback_data": "brain_status"},
+            ],
+            [
+                {"text": "🧪 Şans Testi", "callback_data": "brain_streak72"},
                 {"text": "⚡ EV 25", "callback_data": "brain_ev25"},
             ],
             [
+                {"text": "🛒 Kazanç Araçları", "callback_data": "brain_tools"},
                 {"text": "📒 Komutlar", "callback_data": "brain_help"},
-                {"text": "⏱ Sayaç", "callback_data": "brain_timer"},
             ],
-            [{"text": "⚡ Power Blocks Aç", "url": "https://nmt.gg/power-blocks"}],
+            [
+                {"text": "⏱ Sayaç", "callback_data": "brain_timer"},
+                {"text": "⚡ Power Blocks Aç", "url": "https://nmt.gg/power-blocks"}
+            ],
         ],
     )
 
@@ -460,9 +467,21 @@ def dashboard(state):
 def help_text():
     return (
         "🧠 NMT BRAIN KOMUTLARI\n\n"
+        "🎯 STRATEJİ\n"
+        "/pbset 1 1 1 1 1 — kullandığın footprint alanlarını kaydet\n"
+        "/profile — gerçek PB profilini ve 12 saatlik EV'yi göster\n"
+        "/streak 72 — 72 round sıfır ödül olasılığını hesapla\n"
+        "/target 21 12 — 12 saatte 21 USD için gereken alanı hesapla\n"
+        "/upgrade 20 1000 — +20 kare için 1000 NMT maliyetin kaba geri dönüşü\n"
+        "/flip 1000 1500 — marketplace alış/satış sonrası %10 fee hesabı\n"
+        "/mergecalc 400 400 1200 — iki figürü merge edip satma hesabı\n"
+        "/collectionroi 5000 100 — collection maliyeti/günlük NMT başabaş\n\n"
+        "⚡ POWER BLOCKS / KAYIT\n"
         "/nmt — durum\n"
-        "/pb 120 — Power Blocks geliri\n"
         "/round 120 25 — round ödülü + harcanan Power kaydı\n"
+        "/pb 120 — PB geliri kaydı\n"
+        "/ev 25 — PB EV aralığı\n\n"
+        "💰 MUHASEBE\n"
         "/col 80 — Collection geliri\n"
         "/sell 2200 Ducko — satış geliri\n"
         "/buy 1500 Ducko — marketplace alımı\n"
@@ -471,8 +490,6 @@ def help_text():
         "/withdraw 1000 — çekilen sermaye\n"
         "/limit 3000 — günlük gider limiti\n"
         "/rate 0.00408 — manuel USD/NMT kuru\n"
-        "/ev 25 — Power Blocks EV aralığı\n"
-        "/ev 25 150 — 150 kazanan hücre varsayımı\n"
         "/colcalc 100 7 — collection accrual hesabı\n"
         "/lucky 1000 100 — Lucky Buy risk hesabı\n"
         "/undo — son muhasebe kaydını sil\n\n"
