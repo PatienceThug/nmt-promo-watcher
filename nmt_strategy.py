@@ -188,3 +188,50 @@ def evidence_grade(rounds: int) -> str:
     if rounds < 300:
         return "orta güven"
     return "güçlü kişisel örneklem"
+
+
+KNOWN_POWER_THRESHOLDS = {
+    "1x2": (448, 2),
+    "2x2": (896, 4),
+    "5x5": (5600, 25),
+    "10x10": (22400, 100),
+    "15x15": (50400, 225),
+}
+
+
+def market_break_even_resale(buy_price, fee=MARKET_FEE) -> Decimal:
+    buy = D(buy_price)
+    fee = D(fee)
+    if buy < 0 or fee < 0 or fee >= 1:
+        raise ValueError("Marketplace değerleri geçersiz.")
+    return buy / (Decimal("1") - fee)
+
+
+def footprint_band_runway(current_power, footprint: str) -> dict:
+    key = footprint.lower().replace("×", "x").strip()
+    if key not in KNOWN_POWER_THRESHOLDS:
+        raise ValueError("Bu footprint için resmî eşik snapshot'ı yok. Destek: 1x2, 2x2, 5x5, 10x10, 15x15.")
+    threshold, area = KNOWN_POWER_THRESHOLDS[key]
+    power = D(current_power)
+    if power < threshold:
+        return {"footprint": key, "threshold": threshold, "area": area, "rounds": 0, "mid_ev_nmt": Decimal("0")}
+    rounds = int((power - D(threshold)) // D(area)) + 1
+    mid_ev = expected_nmt(area, WIN_MID) * D(rounds)
+    return {
+        "footprint": key,
+        "threshold": threshold,
+        "area": area,
+        "rounds": rounds,
+        "mid_ev_nmt": mid_ev,
+    }
+
+
+def nft_pb_screen(price_nmt, current_power, footprint: str) -> dict:
+    price = D(price_nmt)
+    if price < 0:
+        raise ValueError("NFT fiyatı negatif olamaz.")
+    r = footprint_band_runway(current_power, footprint)
+    gross = r["mid_ev_nmt"]
+    recovery = gross / price if price > 0 else Decimal("0")
+    r.update({"price_nmt": price, "band_gross_ev_nmt": gross, "price_recovery_ratio": recovery})
+    return r
