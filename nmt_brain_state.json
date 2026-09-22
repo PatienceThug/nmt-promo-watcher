@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "initialized": true,
   "last_update_id": 25227321,
   "ledger": [],
@@ -15,5 +15,15 @@
     "last_sent_at": "2026-09-22T06:36:39.593955+00:00",
     "last_placed_at": "2026-09-22T06:26:25.615466+00:00"
   },
-  "power_rounds": []
+  "power_rounds": [],
+  "strategy": {
+    "footprints": [
+      1,
+      1,
+      1,
+      1,
+      1
+    ],
+    "profile_updated_at": "2026-09-22T06:46:00+00:00"
+  }
 }
