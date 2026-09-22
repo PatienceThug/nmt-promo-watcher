@@ -330,6 +330,43 @@ def collection_roi_text(cost_nmt, daily_nmt):
     )
 
 
+def diagnose_text(state):
+    areas = strategy_areas(state)
+    rows = state.get("power_rounds", [])
+    if not areas:
+        return "Önce /pbset ile footprint profilini ayarla."
+    if not rows:
+        return "Henüz round verisi yok. Power Blocks bildirimlerindeki 0/15/30/... butonlarıyla sonuç kaydet."
+    rewards = [num(x.get("reward_nmt", "0")) for x in rows[-300:]]
+    d = strat.diagnose_rounds(rewards, sum(areas))
+    z = d["approx_z"]
+    lines = [
+        "🩺 POWER BLOCKS DIAGNOSE",
+        "",
+        f"İncelenen round: {d['rounds']} ({d['grade']})",
+        f"Profil alanı: {d['area']} kare",
+        f"Gerçek hit: {strat.fmt(d['actual_hits'], 2)}",
+        f"145 winner teorik beklenen hit: {strat.fmt(d['expected_hits'], 2)}",
+        f"Yaklaşık sapma: z={z:.2f}",
+        f"Son sıfır seri: {d['trailing_zero_rounds']} round",
+        f"Bu sıfır serisinin orta-model olasılığı: %{strat.fmt(d['trailing_zero_probability_mid']*100, 6)}",
+    ]
+    if d["non_15_multiple_rewards"]:
+        lines.append(f"⚠️ {d['non_15_multiple_rewards']} ödül 15 NMT katı değil; giriş/settle kaydını kontrol et.")
+    lines.append("")
+    if d["rounds"] < 30:
+        lines.append("🔬 Örneklem küçük. Henüz sistematik avantaj/dezavantaj sonucu çıkarma.")
+    elif z <= -3:
+        lines.append("🚨 Sonuç teorik beklentinin çok altında. Explorer hash/settle, gerçek footprint ve her round'un gerçekten settle olup olmadığını doğrula.")
+    elif z <= -2:
+        lines.append("⚠️ Sonuç düşük tarafta. Daha fazla round kaydet; Explorer receipt ile birkaç round'u doğrula.")
+    elif z >= 3:
+        lines.append("🔥 Sonuç beklentinin çok üstünde; bunu kalıcı edge sanma. Şans serisi olabilir.")
+    else:
+        lines.append("✅ Kayıtlı sonuçlar şu an teorik rastgele aralıkla çelişmiyor.")
+    return "\n".join(lines)
+
+
 def market_min_text(buy_price):
     buy = num(buy_price)
     resale = strat.market_break_even_resale(buy)
@@ -453,11 +490,15 @@ def send_brain_menu(chat_id, state):
             ],
             [
                 {"text": "🧠 Kazanç Planı", "callback_data": "brain_plan"},
-                {"text": "📈 Roundlar", "callback_data": "brain_rounds"},
+                {"text": "🩺 Diagnose", "callback_data": "brain_diagnose"},
             ],
             [
+                {"text": "📈 Roundlar", "callback_data": "brain_rounds"},
                 {"text": "🛒 Kazanç Araçları", "callback_data": "brain_tools"},
+            ],
+            [
                 {"text": "📒 Komutlar", "callback_data": "brain_help"},
+                {"text": "🩺 Bot Health", "callback_data": "brain_health"},
             ],
             [
                 {"text": "⏱ Sayaç", "callback_data": "brain_timer"},
@@ -557,6 +598,10 @@ def handle_callback(state, chat_id, query):
         safe_answer_callback(qid)
         send(chat_id, plan_text(state))
         return True
+    if data == "brain_diagnose":
+        safe_answer_callback(qid)
+        send(chat_id, diagnose_text(state))
+        return True
     if data == "brain_rounds":
         safe_answer_callback(qid)
         send(chat_id, round_summary_text(state))
@@ -575,6 +620,10 @@ def handle_callback(state, chat_id, query):
             "/target <USD_hedef> <saat>\n\n"
             "Bunlar işlem yapmaz; kötü yatırımı daha para harcamadan elemek için hesap yapar."
         )
+        return True
+    if data == "brain_health":
+        safe_answer_callback(qid)
+        send(chat_id, health_text(state))
         return True
     if data == "brain_status":
         safe_answer_callback(qid)
@@ -687,6 +736,7 @@ def help_text():
         "/mergecalc 400 400 1200 — iki figürü merge edip satma hesabı\n"
         "/collectionroi 5000 100 — collection maliyeti/günlük NMT başabaş\n"
         "/plan — mevcut profil için veri-temelli kazanç planı\n"
+        "/diagnose — kayıtlı PB roundlarını istatistiksel kontrol et\n"
         "/health — bot sağlık/state özeti\n\n"
         "⚡ POWER BLOCKS / KAYIT\n"
         "/nmt — durum\n"
@@ -831,6 +881,9 @@ def handle(state, uid, text):
 
     if cmd == "/health":
         return health_text(state)
+
+    if cmd == "/diagnose":
+        return diagnose_text(state)
 
     if cmd == "/flip":
         if len(args) < 2:
