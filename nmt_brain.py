@@ -176,6 +176,136 @@ def safe_answer_callback(qid, text=""):
         print(f"[BRAIN] callback ack skipped: {str(exc)[:140]}")
 
 
+def strategy_areas(state):
+    return [int(x) for x in state.get("strategy", {}).get("footprints", [])]
+
+
+def strategy_profile_text(state, hours=12):
+    areas = strategy_areas(state)
+    if not areas:
+        return (
+            "🎯 POWER BLOCKS PROFİLİ AYARLANMADI\n\n"
+            "Her kullandığın figürün footprint alanını yaz. Örnek:\n"
+            "/pbset 1 1 1 1 1\n"
+            "veya\n"
+            "/pbset 5x5 2x2 1x2\n\n"
+            "Bot bundan sonra gerçek hit ihtimalini ve yatırım geri dönüşünü bu profile göre hesaplayacak."
+        )
+    m = strat.profile_metrics(areas, hours)
+    low, mid, high = m["min"], m["mid"], m["max"]
+    return (
+        "🎯 POWER BLOCKS PROFİLİ\n\n"
+        f"Slot: {m['slots']}\n"
+        f"Toplam footprint: {m['area']} kare\n"
+        f"Settle başına Power maliyeti: {m['power_per_settle']}\n\n"
+        f"Tek round en az 1 hit ihtimali:\n"
+        f"• 100 winner: %{strat.fmt(low['hit_probability']*100, 2)}\n"
+        f"• 145 winner: %{strat.fmt(mid['hit_probability']*100, 2)}\n"
+        f"• 190 winner: %{strat.fmt(high['hit_probability']*100, 2)}\n\n"
+        f"{strat.fmt(m['rounds'], 0)} round / {strat.fmt(hours, 1)} saat teorik EV:\n"
+        f"{strat.fmt(low['ev_period'])}–{strat.fmt(high['ev_period'])} NMT "
+        f"(orta {strat.fmt(mid['ev_period'])})\n\n"
+        "Bu garanti kazanç değil; resmî round matematiğinin beklenen değeridir."
+    )
+
+
+def streak_text(state, rounds):
+    areas = strategy_areas(state)
+    if not areas:
+        return "Önce /pbset ile footprint profilini ayarla."
+    area = sum(areas)
+    rounds = int(rounds)
+    if rounds <= 0 or rounds > 100000:
+        return "Round sayısı 1–100000 arasında olmalı."
+    p = strat.zero_streak_probability(area, rounds)
+    pct = p * Decimal("100")
+    text = (
+        f"🧪 SIFIR SERİSİ TESTİ\n\n"
+        f"Alan: {area} kare\n"
+        f"Round: {rounds}\n"
+        f"145 winner varsayımıyla hiç hit almama olasılığı: %{strat.fmt(pct, 6)}\n"
+    )
+    if p < Decimal("0.001"):
+        text += "\n🚨 Bu kadar uzun sıfır seri istatistiksel olarak çok sıra dışı. Placement/settle durumunu ve Explorer receipt/hash'i kontrol et."
+    elif p < Decimal("0.01"):
+        text += "\n⚠️ Bu seri düşük olasılıklı. Birkaç round daha kayıt al ve Explorer'da settle'ı doğrula."
+    else:
+        text += "\nBu seri hâlâ normal şans aralığında olabilir."
+    return text
+
+
+def target_text(state, target_usd, hours=12):
+    rate = num(state.get("settings", {}).get("manual_usd_per_nmt", "0"))
+    if rate <= 0:
+        return "Önce güncel kuru /rate <USD/NMT> ile gir. Örnek: /rate 0.00408"
+    area = strat.target_area_for_income(target_usd, rate, hours)
+    current = sum(strategy_areas(state))
+    gap = max(Decimal("0"), area - Decimal(current))
+    return (
+        f"🎯 GELİR HEDEFİ GERÇEKLİK TESTİ\n\n"
+        f"Hedef: {show(num(target_usd), 2)} USD / {show(num(hours), 2)} saat\n"
+        f"Kullanılan kur: 1 NMT = {show(rate, 6)} USD\n"
+        f"145 winner ortalamasında gereken yaklaşık toplam footprint: {strat.fmt(area, 1)} kare\n"
+        f"Senin kayıtlı alanın: {current} kare\n"
+        f"Yaklaşık alan açığı: {strat.fmt(gap, 1)} kare\n\n"
+        "Bu hesap her round aktif olduğun ve footprint'in aynı kaldığı teorik senaryodur; NFT fiyatı, Power tükenmesi ve piyasa riski dahil değildir."
+    )
+
+
+def upgrade_text(state, extra_area, cost_nmt):
+    current = sum(strategy_areas(state))
+    if current <= 0:
+        return "Önce /pbset ile mevcut footprint profilini ayarla."
+    r = strat.upgrade_break_even(current, int(extra_area), cost_nmt)
+    return (
+        "🧮 POWER BLOCKS UPGRADE TESTİ\n\n"
+        f"Mevcut alan: {r['current_area']}\n"
+        f"Ek alan: +{r['extra_area']}\n"
+        f"Yeni toplam: {r['new_area']} kare\n"
+        f"Maliyet: {strat.fmt(r['cost_nmt'])} NMT\n"
+        f"145 winner varsayımıyla ek teorik günlük EV: {strat.fmt(r['extra_ev_day_nmt'])} NMT\n"
+        f"Salt PB geliriyle kaba başabaş: {strat.fmt(r['naive_break_even_days'], 1)} gün\n\n"
+        "⚠️ Bu kaba filtre; Power azalınca footprint düşebilir ve NFT'nin yeniden satış değeri değişebilir."
+    )
+
+
+def flip_text(buy_price, resale_price):
+    r = strat.flip_profit(buy_price, resale_price)
+    return (
+        "🛒 MARKETPLACE FLIP TESTİ\n\n"
+        f"Alış: {strat.fmt(r['buy'])} NMT\n"
+        f"Hedef satış: {strat.fmt(r['resale'])} NMT\n"
+        f"%10 fee sonrası net satış: {strat.fmt(r['net_sale'])} NMT\n"
+        f"Teorik kâr: {strat.fmt(r['profit'])} NMT\n"
+        f"ROI: %{strat.fmt(r['roi']*100, 2)}\n\n"
+        "Likidite ve gerçekten o fiyattan alıcı bulunması bu hesaba dahil değildir."
+    )
+
+
+def merge_text(cost_a, cost_b, next_value):
+    r = strat.merge_profit(cost_a, cost_b, next_value)
+    return (
+        "🔀 MERGE TESTİ\n\n"
+        f"İki input toplam maliyet/değer: {strat.fmt(r['input_cost'])} NMT\n"
+        f"Üst level tahmini satış değeri: {strat.fmt(num(next_value))} NMT\n"
+        f"%10 fee sonrası net: {strat.fmt(r['net_sale'])} NMT\n"
+        f"Teorik fark: {strat.fmt(r['profit'])} NMT\n"
+        f"ROI: %{strat.fmt(r['roi']*100, 2)}\n\n"
+        "Sadece aynı figür + aynı level merge kuralına uygun çiftlerde kullan."
+    )
+
+
+def collection_roi_text(cost_nmt, daily_nmt):
+    days = strat.collection_break_even(cost_nmt, daily_nmt)
+    return (
+        "🧩 COLLECTION BAŞABAŞ\n\n"
+        f"Tamamlama maliyeti: {strat.fmt(cost_nmt)} NMT\n"
+        f"Günlük accrual: {strat.fmt(daily_nmt)} NMT\n"
+        f"Kaba başabaş: {strat.fmt(days, 2)} gün\n\n"
+        "Bu hesap sadece verdiğin günlük accrual sabit kalırsa geçerli; opportunity cost ve figürlerin alternatif satış değeri ayrıca düşünülmeli."
+    )
+
+
 def brain_menu_text(state):
     p = state.get("power", {})
     raw = p.get("next_at") or ""
