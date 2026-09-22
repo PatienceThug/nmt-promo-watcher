@@ -11,6 +11,7 @@ REQUIRED = [
     "nmt_rules.json",
     "test_nmt_brain.py",
     "test_nmt_strategy.py",
+    "test_persist_state.py",
     ".github/workflows/nmt-brain.yml",
 ]
 OBSOLETE_AFTER_MIGRATION = [
@@ -18,6 +19,7 @@ OBSOLETE_AFTER_MIGRATION = [
     ".github/workflows/send-brain-menu.yml",
     ".github/workflows/power-blocks-reminder.yml",
     ".github/workflows/nmt-brain-probe.yml",
+    ".github/workflows/cancel-stale-brain.yml",
 ]
 SECRET_PATTERNS = [
     re.compile(r"TELEGRAM_BOT_TOKEN\s*=\s*['\"][0-9]{6,}:[A-Za-z0-9_-]{20,}['\"]"),
